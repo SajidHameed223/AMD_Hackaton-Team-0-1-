@@ -144,3 +144,7 @@ See `.env.example` for the full list. Key ones:
 ## Token Usage Stats
 
 ![Token usage stats](assests/token%20usage%20stats.png)
+
+## Model and Monthly Stats
+
+![Model and monthly stats](assests/model%20and%20monthly%20stats.png)
