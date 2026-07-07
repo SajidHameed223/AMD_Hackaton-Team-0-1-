@@ -1,5 +1,6 @@
 venv/
-.venv/
+.venv*/
+get-pip.py
 __pycache__/
 *.py[cod]
 *.pyo
@@ -8,3 +9,5 @@ __pycache__/
 .env
 .env.*
 .vscode/*.code-workspace
+# ML model artifacts (regenerate via: python -m ml.train)
+ml/*.pkl

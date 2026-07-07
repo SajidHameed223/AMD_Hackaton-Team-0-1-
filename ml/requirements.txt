@@ -1,0 +1,7 @@
+# ML Router (Jae)
+# Note: Default `python` on this machine is 3.14 which lacks these dependencies.
+# Please use Python 3.12 or the `.venv312` virtual environment.
+# Pinned for .pkl portability
+scikit-learn==1.8.0
+numpy==1.26.4
+joblib==1.5.3
