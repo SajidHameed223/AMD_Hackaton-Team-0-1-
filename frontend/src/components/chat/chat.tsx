@@ -8,7 +8,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import type { Route } from "@/lib/types";
+import type { Route, RoutePreference } from "@/lib/types";
 import { Avatar } from "../core";
 
 /* ---- RouteBadge — the router's verdict, worn by each assistant turn ---- */
@@ -170,11 +170,15 @@ export function ChatInput({
   disabled = false,
   placeholder,
   footStart,
+  routePreference,
+  onRoutePreferenceChange,
 }: {
   onSend: (text: string) => void;
   disabled?: boolean;
   placeholder?: string;
   footStart?: ReactNode;
+  routePreference: RoutePreference;
+  onRoutePreferenceChange: (preference: RoutePreference) => void;
 }) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -238,11 +242,54 @@ export function ChatInput({
         </button>
       </div>
       <div className="o1-input__foot">
-        {footStart ?? <span />}
+        <div className="o1-input__status">
+          {footStart ?? <span />}
+          <RoutePreferenceSwitch
+            value={routePreference}
+            onChange={onRoutePreferenceChange}
+            disabled={disabled}
+          />
+        </div>
         <span className="o1-input__hint">
           Enter to send · Shift+Enter for a new line
         </span>
       </div>
+    </div>
+  );
+}
+
+function RoutePreferenceSwitch({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: RoutePreference;
+  onChange: (preference: RoutePreference) => void;
+  disabled?: boolean;
+}) {
+  const items: { id: RoutePreference; label: string; route?: Route }[] = [
+    { id: "auto", label: "Auto" },
+    { id: "local", label: "Local", route: "local" },
+    { id: "cloud", label: "Cloud", route: "cloud" },
+  ];
+
+  return (
+    <div className="o1-model-switch" role="radiogroup" aria-label="Model route">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="radio"
+          aria-checked={value === item.id}
+          className={`o1-model-switch__item${
+            value === item.id ? " o1-model-switch__item--active" : ""
+          }${item.route ? ` o1-model-switch__item--${item.route}` : ""}`}
+          onClick={() => onChange(item.id)}
+          disabled={disabled}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }

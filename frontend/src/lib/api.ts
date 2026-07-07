@@ -3,6 +3,7 @@ import type {
   ChatStreamEvent,
   ChatTurn,
   Route,
+  RoutePreference,
   UsageSummary,
 } from "./types";
 
@@ -40,8 +41,10 @@ export async function checkHealth(): Promise<boolean> {
 export async function sendChat(
   message: string,
   history: ChatTurn[],
+  routePreference: RoutePreference,
   cb: ChatCallbacks,
 ): Promise<void> {
+  const forcedRoute = routePreference === "auto" ? undefined : routePreference;
   try {
     const res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
@@ -49,7 +52,7 @@ export async function sendChat(
         "Content-Type": "application/json",
         Accept: "text/event-stream, application/json",
       },
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, routePreference: forcedRoute }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -74,7 +77,7 @@ export async function sendChat(
     cb.onDelta(reply);
     cb.onDone(route, model, data.latency_ms ?? 0);
   } catch {
-    await demoChat(message, cb);
+    await demoChat(message, forcedRoute, cb);
   }
 }
 
@@ -113,8 +116,12 @@ async function consumeSse(
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function demoChat(message: string, cb: ChatCallbacks): Promise<void> {
-  const reply = pickDemoReply(message);
+async function demoChat(
+  message: string,
+  routePreference: Route | undefined,
+  cb: ChatCallbacks,
+): Promise<void> {
+  const reply = pickDemoReply(message, routePreference);
   await sleep(700 + Math.random() * 450);
   cb.onRoute(reply.route, reply.model);
   // stream in word-ish chunks, faster for the "fast local" feel

@@ -49,23 +49,33 @@ const DEFAULT_LOCAL = `The router scored this prompt as low-complexity, so it st
 
 const DEFAULT_CLOUD = `This one scored above the complexity threshold, so the router escalated it to the cloud model — a longer round trip, but the larger model handles multi-step reasoning far better. You can watch the local/cloud split build up on the Dashboard tab.`;
 
-export function pickDemoReply(text: string): DemoReply {
+export function pickDemoReply(text: string, routePreference?: Route): DemoReply {
   const t = text.toLowerCase();
+  const withPreference = (reply: DemoReply): DemoReply => {
+    if (!routePreference) return reply;
+    return {
+      ...reply,
+      route: routePreference,
+      model: routePreference === "local" ? "llama-3.1-8b" : "qwen-72b",
+      latencyMs: routePreference === "local" ? 96 : 880,
+    };
+  };
+
   if (/big[- ]?o|complexit|notation/.test(t)) {
-    return { route: "cloud", model: "qwen-72b", latencyMs: 840, markdown: BIG_O };
+    return withPreference({ route: "cloud", model: "qwen-72b", latencyMs: 840, markdown: BIG_O });
   }
   if (/quicksort|sort|python|code|function|script/.test(t)) {
-    return { route: "cloud", model: "qwen-72b", latencyMs: 1120, markdown: QUICKSORT };
+    return withPreference({ route: "cloud", model: "qwen-72b", latencyMs: 1120, markdown: QUICKSORT });
   }
   if (/ocean|blue|water|sea/.test(t)) {
-    return { route: "local", model: "llama-3.1-8b", latencyMs: 95, markdown: OCEAN };
+    return withPreference({ route: "local", model: "llama-3.1-8b", latencyMs: 95, markdown: OCEAN });
   }
   if (/standup|status update|draft/.test(t)) {
-    return { route: "local", model: "llama-3.1-8b", latencyMs: 110, markdown: STANDUP };
+    return withPreference({ route: "local", model: "llama-3.1-8b", latencyMs: 110, markdown: STANDUP });
   }
-  return text.length > 90
+  return withPreference(text.length > 90
     ? { route: "cloud", model: "qwen-72b", latencyMs: 910, markdown: DEFAULT_CLOUD }
-    : { route: "local", model: "llama-3.1-8b", latencyMs: 92, markdown: DEFAULT_LOCAL };
+    : { route: "local", model: "llama-3.1-8b", latencyMs: 92, markdown: DEFAULT_LOCAL });
 }
 
 export const DEMO_SUGGESTIONS = [

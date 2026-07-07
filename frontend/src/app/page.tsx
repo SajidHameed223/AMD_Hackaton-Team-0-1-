@@ -19,7 +19,7 @@ import { JoyDecorations } from "@/components/JoyDecorations";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { checkHealth, sendChat } from "@/lib/api";
 import { DEMO_SUGGESTIONS } from "@/lib/demo";
-import type { MessageModel, RouteVerdict } from "@/lib/types";
+import type { MessageModel, RoutePreference, RouteVerdict } from "@/lib/types";
 
 let seq = 0;
 const nextId = (prefix: string) => `${prefix}${++seq}`;
@@ -31,6 +31,8 @@ export default function Home() {
   const [messages, setMessages] = useState<MessageModel[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [lastVerdict, setLastVerdict] = useState<RouteVerdict | null>(null);
+  const [routePreference, setRoutePreference] =
+    useState<RoutePreference>("auto");
 
   // opening scene — let the wordmark take one ride before the app fades in
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function Home() {
       ]);
       setPendingId(asstId);
 
-      void sendChat(text, history, {
+      void sendChat(text, history, routePreference, {
         onRoute: (route, model) =>
           patchMessage(asstId, {
             status: "streaming",
@@ -106,7 +108,7 @@ export default function Home() {
         },
       });
     },
-    [messages, pendingId, patchMessage],
+    [messages, pendingId, patchMessage, routePreference],
   );
 
   const scrollRef = useAutoScroll(messages);
@@ -170,6 +172,8 @@ export default function Home() {
                   disabled={!!pendingId}
                   placeholder="Ask O(1) anything…"
                   footStart={footBadge}
+                  routePreference={routePreference}
+                  onRoutePreferenceChange={setRoutePreference}
                 />
               }
             >

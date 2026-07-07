@@ -47,44 +47,33 @@ body {
 .o1-joy--fallback .o1-joy__fallback {
   display: block;
 }
-.o1-joy__ring,
-.o1-joy__chip {
+.o1-joy__paw {
   position: absolute;
   display: block;
-  opacity: 0.34;
-}
-.o1-joy__ring {
-  width: 84px;
-  height: 84px;
+  width: 46px;
+  height: 38px;
   border-radius: 50%;
-  border: 12px solid var(--o1-cyan-500);
+  background:
+    radial-gradient(circle at 20% 12%, var(--o1-coral-400) 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 2%, var(--o1-sun-300) 0 14%, transparent 15%),
+    radial-gradient(circle at 80% 12%, var(--o1-cyan-400) 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 72%, var(--o1-cyan-500) 0 32%, transparent 33%);
+  opacity: 0.44;
 }
-.o1-joy__ring--a {
-  left: 7vw;
-  top: 16vh;
+.o1-joy__paw--a {
+  left: 4vw;
+  top: 12vh;
+  transform: rotate(-18deg);
 }
-.o1-joy__ring--b {
-  right: 8vw;
-  top: 20vh;
-  border-color: var(--o1-coral-400);
-  transform: rotate(-12deg);
-}
-.o1-joy__chip {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: var(--o1-sun-300);
-  transform: rotate(18deg);
-}
-.o1-joy__chip--a {
-  right: 18vw;
+.o1-joy__paw--b {
+  right: 7vw;
   bottom: 22vh;
+  transform: rotate(24deg) scale(1.2);
 }
-.o1-joy__chip--b {
-  left: 20vw;
-  bottom: 10vh;
-  background: var(--o1-cyan-300);
-  transform: rotate(-24deg);
+.o1-joy__paw--c {
+  left: 22vw;
+  bottom: 12vh;
+  transform: rotate(12deg) scale(0.78);
 }
 
 /* Screen panes under the AppShell top bar */

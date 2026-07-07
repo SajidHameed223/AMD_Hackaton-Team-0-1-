@@ -10,6 +10,7 @@
  */
 
 export type Route = "local" | "cloud";
+export type RoutePreference = "auto" | Route;
 
 export interface RouteVerdict {
   route: Route;
@@ -25,6 +26,7 @@ export interface ChatTurn {
 export interface ChatRequest {
   message: string;
   history: ChatTurn[];
+  routePreference?: Route;
 }
 
 /** Non-streaming reply shape. */
