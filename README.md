@@ -140,3 +140,7 @@ See `.env.example` for the full list. Key ones:
 ## Stats Screen
 
 ![Stats screen](assests/stats.png)
+
+## Token Usage Stats
+
+![Token usage stats](assests/token%20usage%20stats.png)
