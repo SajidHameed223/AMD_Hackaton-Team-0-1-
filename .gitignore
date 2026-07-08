@@ -8,3 +8,6 @@ __pycache__/
 .env
 .env.*
 .vscode/*.code-workspace
+
+# Local model artifacts (too large for GitHub)
+models/
