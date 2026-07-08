@@ -1,7 +1,7 @@
 # Frontend API Contract
 
-This is the stable FastAPI contract for the O(1) frontend. The generated API
-reference is also available from a running backend at:
+This is the stable FastAPI contract for the O(1) frontend. The generated
+FastAPI reference is also available from a running backend at:
 
 - `GET /docs`
 - `GET /openapi.json`
@@ -13,6 +13,9 @@ Backend:
 ```bash
 DATABASE_URL=postgresql+psycopg2://o1:o1@localhost:55432/o1
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CHAT_BACKEND_URL=http://localhost:9000/chat
+LOCAL_MODEL_NAME=local-model
+CLOUD_MODEL_NAME=cloud-model
 python -m alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
@@ -84,7 +87,7 @@ Response:
 {
   "reply": "Big-O describes how work grows as input grows.",
   "route": "cloud",
-  "model": "qwen-72b",
+  "model": "cloud-model",
   "latency_ms": 840
 }
 ```
@@ -95,6 +98,10 @@ Notes:
 - The retry button calls this same endpoint with the original user message and
   prior history before that turn.
 - `route` is always `local` or `cloud`.
+- `model` is any backend-provided display name. It is not tied to any provider.
+- If `CHAT_BACKEND_URL` is set, FastAPI forwards this payload to that backend.
+  The backend can use any model or router as long as it returns the response
+  shape above.
 
 ## List Chat Sessions
 
@@ -160,7 +167,7 @@ Response:
       "status": "done",
       "verdict": {
         "route": "cloud",
-        "model": "qwen-72b",
+        "model": "cloud-model",
         "latencyMs": 840
       }
     }
@@ -202,7 +209,7 @@ Content-Type: application/json
       "status": "done",
       "verdict": {
         "route": "cloud",
-        "model": "qwen-72b",
+        "model": "cloud-model",
         "latencyMs": 840
       }
     }
@@ -236,12 +243,12 @@ Response shape:
 {
   "rangeLabel": "Jul 2 - Jul 8 · Postgres history",
   "days": ["Jul 2", "Jul 3", "Jul 4", "Jul 5", "Jul 6", "Jul 7", "Jul 8"],
-  "routeSeries": [{ "name": "qwen-72b", "points": [0, 0, 0, 0, 0, 0, 10] }],
+  "routeSeries": [{ "name": "cloud-model", "points": [0, 0, 0, 0, 0, 0, 10] }],
   "tokenInput": [0, 0, 0, 0, 0, 0, 5],
   "tokenOutput": [0, 0, 0, 0, 0, 0, 10],
   "modelRows": [
     {
-      "model": "qwen-72b",
+      "model": "cloud-model",
       "provider": "cloud",
       "requests": 1,
       "inputTokens": 0,

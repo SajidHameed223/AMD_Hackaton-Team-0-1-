@@ -384,7 +384,7 @@ export default function Home() {
   ) : lastVerdict ? (
     <RouteBadge {...lastVerdict} />
   ) : (
-    <RouteBadge route="local" model="llama-3.1-8b" />
+    <RouteBadge route="routing" />
   );
 
   return (
@@ -412,7 +412,7 @@ export default function Home() {
                 </Badge>
               ) : apiOnline ? (
                 <Badge tone="good" dot>
-                  2 models online
+                  API online
                 </Badge>
               ) : (
                 <Badge tone="sun" dot>
@@ -458,7 +458,7 @@ export default function Home() {
                         Ask anything. Routed in <em>O(1)</em>.
                       </>
                     }
-                    subtitle="Small prompts stay on the local model; hard ones ride out to the cloud."
+                    subtitle="Prompts are routed automatically through the backend."
                     suggestions={DEMO_SUGGESTIONS}
                     onPick={send}
                   />

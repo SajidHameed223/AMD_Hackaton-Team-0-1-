@@ -84,8 +84,8 @@ The frontend reads and writes:
 - `GET /usage` for dashboard metrics shaped from saved chat history
 
 For the copy-paste integration contract, see
-`docs/frontend-api-contract.md`. FastAPI also exposes live OpenAPI docs at
-`/docs` and `/openapi.json`.
+`docs/frontend-api-contract.md`. FastAPI also exposes live interactive docs at
+`/docs` and schema JSON at `/openapi.json`.
 
 If `DATABASE_URL` is missing, `/health` still returns `status: "ok"` with
 `database: "not_configured"`, chat history endpoints return `503`, and

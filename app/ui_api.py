@@ -1,9 +1,14 @@
 from datetime import UTC, date, datetime, timedelta
+import json
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 import psycopg2
+from pydantic import ValidationError
 from psycopg2.extras import RealDictCursor
 
+from app.config import get_chat_backend_url, get_model_name
 from app.database import get_connection
 from app.schemas import ChatRequest, ChatResponse, UsageSummary
 
@@ -22,6 +27,9 @@ router = APIRouter()
     ),
 )
 def chat(payload: ChatRequest) -> ChatResponse:
+    forwarded = _forward_to_chat_backend(payload)
+    if forwarded is not None:
+        return forwarded
     reply = _pick_reply(payload.message)
     return ChatResponse(**reply)
 
@@ -42,10 +50,12 @@ def usage() -> UsageSummary:
 
 def _pick_reply(message: str) -> dict:
     text = message.lower()
+    cloud_model = get_model_name("cloud")
+    local_model = get_model_name("local")
     if any(term in text for term in ("big-o", "big o", "complexity", "notation")):
         return {
             "route": "cloud",
-            "model": "qwen-72b",
+            "model": cloud_model,
             "latency_ms": 840,
             "reply": (
                 "Big-O describes how work grows as input grows. A hash lookup is "
@@ -57,18 +67,18 @@ def _pick_reply(message: str) -> dict:
     if any(term in text for term in ("code", "python", "function", "script", "sort")):
         return {
             "route": "cloud",
-            "model": "qwen-72b",
+            "model": cloud_model,
             "latency_ms": 1040,
             "reply": (
                 "The router marked this as a coding task, so auto-routing sent it "
-                "to the larger model. The frontend can replace this stubbed reply "
+                "to the larger backend model. The team can replace this stubbed reply "
                 "with the real model response without changing the contract."
             ),
         }
     route = "cloud" if len(message) > 90 else "local"
     return {
         "route": route,
-        "model": "qwen-72b" if route == "cloud" else "llama-3.1-8b",
+        "model": cloud_model if route == "cloud" else local_model,
         "latency_ms": 900 if route == "cloud" else 95,
         "reply": (
             "Auto-routing is connected through FastAPI. This endpoint returns the "
@@ -76,6 +86,35 @@ def _pick_reply(message: str) -> dict:
             "behind it cleanly."
         ),
     }
+
+
+def _forward_to_chat_backend(payload: ChatRequest) -> ChatResponse | None:
+    backend_url = get_chat_backend_url()
+    if not backend_url:
+        return None
+
+    request = Request(
+        backend_url,
+        data=json.dumps(payload.model_dump(mode="json")).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=502, detail="Chat backend unavailable") from exc
+
+    normalized = {
+        "reply": data.get("reply") or data.get("response") or data.get("content") or "",
+        "route": data.get("route") or "cloud",
+        "model": data.get("model") or data.get("model_name") or get_model_name("cloud"),
+        "latency_ms": data.get("latency_ms") or data.get("latencyMs") or 0,
+    }
+    try:
+        return ChatResponse(**normalized)
+    except ValidationError as exc:
+        raise HTTPException(status_code=502, detail="Chat backend returned an invalid payload") from exc
 
 
 def _build_usage_summary() -> UsageSummary:
@@ -103,8 +142,8 @@ def _build_usage_summary() -> UsageSummary:
     input_tokens = [0] * len(days)
     output_tokens = [0] * len(days)
     route_points = {
-        "llama-3.1-8b": [0] * len(days),
-        "qwen-72b": [0] * len(days),
+        get_model_name("local"): [0] * len(days),
+        get_model_name("cloud"): [0] * len(days),
     }
     cost_trend = [0.0] * len(days)
     model_rows: dict[str, dict] = {}
@@ -123,7 +162,7 @@ def _build_usage_summary() -> UsageSummary:
             continue
 
         route = row["route"] or "local"
-        model = row["model"] or ("qwen-72b" if route == "cloud" else "llama-3.1-8b")
+        model = row["model"] or get_model_name(route)
         output_tokens[index] += tokens
         request_trend[index] += 1
         route_points.setdefault(model, [0] * len(days))[index] += tokens
@@ -159,7 +198,7 @@ def _build_usage_summary() -> UsageSummary:
         routeSeries=[
             {"name": model, "points": points}
             for model, points in route_points.items()
-            if any(points) or model in {"llama-3.1-8b", "qwen-72b"}
+            if any(points) or model in {get_model_name("local"), get_model_name("cloud")}
         ],
         tokenInput=input_tokens,
         tokenOutput=output_tokens,
@@ -210,8 +249,8 @@ def _empty_usage(labels: list[str]) -> UsageSummary:
         rangeLabel=f"{labels[0]} - {labels[-1]} · no Postgres history yet",
         days=labels,
         routeSeries=[
-            {"name": "llama-3.1-8b", "points": zeroes},
-            {"name": "qwen-72b", "points": zeroes},
+            {"name": get_model_name("local"), "points": zeroes},
+            {"name": get_model_name("cloud"), "points": zeroes},
         ],
         tokenInput=zeroes,
         tokenOutput=zeroes,

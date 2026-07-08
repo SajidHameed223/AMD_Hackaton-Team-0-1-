@@ -53,20 +53,20 @@ export function pickDemoReply(text: string): DemoReply {
   const t = text.toLowerCase();
 
   if (/big[- ]?o|complexit|notation/.test(t)) {
-    return { route: "cloud", model: "qwen-72b", latencyMs: 840, markdown: BIG_O };
+    return { route: "cloud", model: "cloud-model", latencyMs: 840, markdown: BIG_O };
   }
   if (/quicksort|sort|python|code|function|script/.test(t)) {
-    return { route: "cloud", model: "qwen-72b", latencyMs: 1120, markdown: QUICKSORT };
+    return { route: "cloud", model: "cloud-model", latencyMs: 1120, markdown: QUICKSORT };
   }
   if (/ocean|blue|water|sea/.test(t)) {
-    return { route: "local", model: "llama-3.1-8b", latencyMs: 95, markdown: OCEAN };
+    return { route: "local", model: "local-model", latencyMs: 95, markdown: OCEAN };
   }
   if (/standup|status update|draft/.test(t)) {
-    return { route: "local", model: "llama-3.1-8b", latencyMs: 110, markdown: STANDUP };
+    return { route: "local", model: "local-model", latencyMs: 110, markdown: STANDUP };
   }
   return text.length > 90
-    ? { route: "cloud", model: "qwen-72b", latencyMs: 910, markdown: DEFAULT_CLOUD }
-    : { route: "local", model: "llama-3.1-8b", latencyMs: 92, markdown: DEFAULT_LOCAL };
+    ? { route: "cloud", model: "cloud-model", latencyMs: 910, markdown: DEFAULT_CLOUD }
+    : { route: "local", model: "local-model", latencyMs: 92, markdown: DEFAULT_LOCAL };
 }
 
 export const DEMO_SUGGESTIONS = [
@@ -77,19 +77,19 @@ export const DEMO_SUGGESTIONS = [
 ];
 
 /* Model/series order is fixed and identical across charts and the table:
-   slot 1 = llama (local, cyan), slot 2 = qwen (cloud, coral). */
+   slot 1 = local backend, slot 2 = cloud/backend escalated model. */
 export const DEMO_USAGE: UsageSummary = {
   rangeLabel: "Jul 1 – Jul 7, 2026 · all models",
   days: ["Jul 1", "Jul 2", "Jul 3", "Jul 4", "Jul 5", "Jul 6", "Jul 7"],
   routeSeries: [
-    { name: "llama-3.1-8b", points: [38400, 42100, 44900, 50200, 52800, 55600, 58900] },
-    { name: "qwen-72b", points: [16800, 19400, 21200, 24600, 27100, 30300, 32800] },
+    { name: "local-model", points: [38400, 42100, 44900, 50200, 52800, 55600, 58900] },
+    { name: "cloud-model", points: [16800, 19400, 21200, 24600, 27100, 30300, 32800] },
   ],
   tokenInput: [34100, 38000, 40900, 46200, 49400, 53100, 56700],
   tokenOutput: [21100, 23500, 25200, 28600, 30500, 32800, 35000],
   modelRows: [
-    { model: "llama-3.1-8b", provider: "local", requests: 1284, inputTokens: 214600, outputTokens: 128300, cost: 0 },
-    { model: "qwen-72b", provider: "cloud", requests: 412, inputTokens: 103800, outputTokens: 68400, cost: 7.42 },
+    { model: "local-model", provider: "local", requests: 1284, inputTokens: 214600, outputTokens: 128300, cost: 0 },
+    { model: "cloud-model", provider: "cloud", requests: 412, inputTokens: 103800, outputTokens: 68400, cost: 7.42 },
   ],
   stats: {
     requests: {
