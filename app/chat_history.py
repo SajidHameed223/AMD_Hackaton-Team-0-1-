@@ -18,7 +18,12 @@ from app.schemas import (
 router = APIRouter(prefix="/chat", tags=["chat history"])
 
 
-@router.get("/sessions", response_model=ChatSessionsResponse)
+@router.get(
+    "/sessions",
+    response_model=ChatSessionsResponse,
+    summary="List recent chat sessions",
+    description="Returns up to 50 saved chat sessions for the left history rail.",
+)
 def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
     with db.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
@@ -42,12 +47,25 @@ def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
     )
 
 
-@router.get("/sessions/{session_id}", response_model=ChatSessionDetail)
+@router.get(
+    "/sessions/{session_id}",
+    response_model=ChatSessionDetail,
+    summary="Read one chat session",
+    description="Returns the full message list for one saved conversation.",
+)
 def get_session(session_id: UUID, db: PgConnection = Depends(get_db)) -> ChatSessionDetail:
     return _load_session(db, session_id)
 
 
-@router.put("/sessions/{session_id}", response_model=ChatSessionDetail)
+@router.put(
+    "/sessions/{session_id}",
+    response_model=ChatSessionDetail,
+    summary="Create or replace one chat session",
+    description=(
+        "Upserts session metadata and replaces the message list atomically for "
+        "the supplied session id."
+    ),
+)
 def save_session(
     session_id: UUID,
     payload: SaveChatSessionRequest,

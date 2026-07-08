@@ -83,6 +83,10 @@ The frontend reads and writes:
 - `PUT /chat/sessions/{session_id}` to upsert a conversation
 - `GET /usage` for dashboard metrics shaped from saved chat history
 
+For the copy-paste integration contract, see
+`docs/frontend-api-contract.md`. FastAPI also exposes live OpenAPI docs at
+`/docs` and `/openapi.json`.
+
 If `DATABASE_URL` is missing, `/health` still returns `status: "ok"` with
 `database: "not_configured"`, chat history endpoints return `503`, and
 `GET /usage` returns a zeroed dashboard payload.

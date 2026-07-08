@@ -8,16 +8,34 @@ from app.database import get_connection
 from app.schemas import ChatRequest, ChatResponse, UsageSummary
 
 
-router = APIRouter(tags=["ui"])
+router = APIRouter()
 
 
-@router.post("/chat", response_model=ChatResponse)
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    tags=["chat"],
+    summary="Create an auto-routed assistant reply",
+    description=(
+        "Accepts the latest user message plus prior turns. The frontend treats "
+        "the route as automatic only; no manual local/cloud selector is required."
+    ),
+)
 def chat(payload: ChatRequest) -> ChatResponse:
     reply = _pick_reply(payload.message)
     return ChatResponse(**reply)
 
 
-@router.get("/usage", response_model=UsageSummary)
+@router.get(
+    "/usage",
+    response_model=UsageSummary,
+    tags=["usage"],
+    summary="Read dashboard usage metrics",
+    description=(
+        "Returns the complete dashboard payload. With Postgres configured, values "
+        "are derived from saved chat history; otherwise a valid zeroed payload is returned."
+    ),
+)
 def usage() -> UsageSummary:
     return _build_usage_summary()
 
