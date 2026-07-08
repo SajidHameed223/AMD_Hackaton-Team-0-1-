@@ -11,3 +11,6 @@ __pycache__/
 .vscode/*.code-workspace
 # ML model artifacts (regenerate via: python -m ml.train)
 ml/*.pkl
+
+# Local model artifacts (too large for GitHub)
+models/

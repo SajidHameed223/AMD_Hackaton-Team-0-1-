@@ -1,6 +1,11 @@
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-MODEL_NAME = "google/gemma-2b-it"
+import os
+
+MODEL_NAME = os.getenv(
+    "MODEL_NAME",
+    "google/gemma-2b-it"   # default for development
+)
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
