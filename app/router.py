@@ -366,12 +366,81 @@ _SOLVERS = {
 _CONF_THRESHOLD = 0.7
 
 
+def verify_code_debug(fixed_code: str) -> bool:
+    # ponytail: runs solver-fixed code in a stripped namespace to catch
+    # logic bugs (not just syntax). max-like funcs get multi-input asserts;
+    # others only crash-detect — true logic check needs a spec we don't have.
+    # Safe builtins only: blocks open/eval/exec/import, keeps math helpers.
+    if not fixed_code.strip():
+        return True
+    _safe_builtins = {
+        "max": max, "min": min, "len": len, "sorted": sorted, "sum": sum,
+        "abs": abs, "range": range, "int": int, "float": float, "round": round,
+        "list": list, "dict": dict, "tuple": tuple, "str": str, "set": set,
+        "enumerate": enumerate, "zip": zip, "map": map, "filter": filter,
+        "reversed": reversed, "any": any, "all": all, "bool": bool,
+    }
+    safe_globals = {"__builtins__": _safe_builtins}
+    try:
+        exec(compile(fixed_code, "<string>", "exec"), safe_globals)
+        funcs = [v for k, v in safe_globals.items()
+                 if callable(v) and not k.startswith("__")]
+        if not funcs:
+            return True
+        func = funcs[0]
+        name = func.__name__.lower() if hasattr(func, "__name__") else ""
+        if "max" in name or "largest" in name or "greatest" in name:
+            for args, expect in [([1, 3, 2], 3), ([5, 5, 1], 5), ([-1, -3], -1)]:
+                try:
+                    if func(args) != expect:
+                        return False
+                except Exception:
+                    return False
+            return True
+        try:
+            func(1)
+        except TypeError:
+            try:
+                func("x")
+            except Exception:
+                return False
+        except Exception:
+            return False
+        return True
+    except Exception:
+        return False
+
+
+def verify_math(result: str, prompt: str) -> bool:
+    try:
+        val = float(result)
+        if val != val or val == float('inf') or val == float('-inf'):
+            return False
+        if abs(val) >= 1e15:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 def dispatch(prompt: str) -> dict:
     category = classify(prompt)
     solver = _SOLVERS.get(category)
     if solver is not None:
         answer, conf = solver(prompt)
         if answer and conf >= _CONF_THRESHOLD:
+            if category == "math":
+                if not verify_math(answer, prompt):
+                    return {"tier": "T1", "category": category, "answer": "", "confidence": 0.0, "prompt": prompt}
+            elif category == "code_debug" and answer.startswith("No issues found"):
+                m = re.search(r"```(?:python)?\s*\n(.*?)```", prompt, re.S)
+                if m:
+                    code = m.group(1)
+                else:
+                    m2 = re.search(r"((?:def |class |import |from |if |for |while |print\().*)", prompt, re.S)
+                    code = m2.group(1) if m2 else ""
+                if not verify_code_debug(code):
+                    return {"tier": "T1", "category": category, "answer": "", "confidence": 0.0, "prompt": prompt}
             return {"tier": "T0", "category": category, "answer": answer, "confidence": conf, "tokens": 0}
     return {"tier": "T1", "category": category, "answer": "", "confidence": 0.0, "prompt": prompt}
 
