@@ -86,6 +86,8 @@ If `DATABASE_URL` is absent:
   duplicate stale assistant messages.
 - The history rail should use PostgreSQL-backed endpoints when available and
   fall back to local draft behavior when unavailable.
+- LaTeX rendering and code-block rendering are Science_AJ's frontend lane; do
+  not add a FastAPI endpoint for them unless explicitly requested.
 
 ## Development Notes
 

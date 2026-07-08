@@ -171,13 +171,6 @@ def ui_config() -> UiConfigResponse:
             "versionedPath": "local-draft",
             "description": "Client-only empty session until the first saved message.",
         },
-        {
-            "label": "LaTeX/code rendering",
-            "method": "CLIENT",
-            "path": "markdown-renderer",
-            "versionedPath": "markdown-renderer",
-            "description": "Client-only Markdown, LaTeX, and code-block rendering.",
-        },
     ]
     return UiConfigResponse(apiVersion="v1", endpoints=endpoints)
 

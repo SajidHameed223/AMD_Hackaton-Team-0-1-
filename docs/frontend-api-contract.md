@@ -89,10 +89,12 @@ This table is the integration checklist by UI function.
 | Copy assistant response | `CLIENT` | browser clipboard | browser clipboard | No |
 | Copy code block | `CLIENT` | browser clipboard | browser clipboard | No |
 | New chat empty draft | `CLIENT` | local draft until first save | local draft until first save | No |
-| LaTeX/code rendering | `CLIENT` | Markdown renderer | Markdown renderer | No |
 
 `GET /ui/config` returns this same mapping as JSON so integration clients can
 discover the current paths programmatically.
+
+LaTeX and code rendering are frontend-owned by Science_AJ and do not need a
+FastAPI endpoint.
 
 ## Health
 
@@ -427,13 +429,6 @@ Response shape:
       "path": "local-draft",
       "versionedPath": "local-draft",
       "description": "Client-only empty session until the first saved message."
-    },
-    {
-      "label": "LaTeX/code rendering",
-      "method": "CLIENT",
-      "path": "markdown-renderer",
-      "versionedPath": "markdown-renderer",
-      "description": "Client-only Markdown, LaTeX, and code-block rendering."
     }
   ]
 }
