@@ -35,13 +35,17 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
-export async function fetchChatSessionSummaries(): Promise<{
+export async function fetchChatSessionSummaries(query = ""): Promise<{
   sessions: ChatSessionSummary[];
   live: boolean;
 }> {
   try {
+    const q = query.trim();
+    const path = q
+      ? `/chat/sessions/search?q=${encodeURIComponent(q)}`
+      : "/chat/sessions";
     const data = await fetchJson<{ sessions: ChatSessionSummary[] }>(
-      "/chat/sessions",
+      path,
       { signal: AbortSignal.timeout(3000) },
     );
     return { sessions: data.sessions, live: true };
@@ -93,9 +97,10 @@ export async function sendChat(
   message: string,
   history: ChatTurn[],
   cb: ChatCallbacks,
+  path = "/chat",
 ): Promise<void> {
   try {
-    const res = await fetch(`${API_BASE}/chat`, {
+    const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -186,7 +191,7 @@ export async function fetchUsage(): Promise<{
   live: boolean;
 }> {
   try {
-    const usage = await fetchJson<UsageSummary>("/usage", {
+    const usage = await fetchJson<UsageSummary>("/dashboard/usage", {
       signal: AbortSignal.timeout(3000),
     });
     return { usage, live: true };

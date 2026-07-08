@@ -2,7 +2,7 @@ import type { Route, UsageSummary } from "./types";
 
 /**
  * Demo mode — a faithful simulation of the O(1) router so the UI is fully
- * demoable before the FastAPI /chat and /usage endpoints land.
+ * demoable before the FastAPI /chat and /dashboard/usage endpoints land.
  */
 
 export interface DemoReply {

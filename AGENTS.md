@@ -49,10 +49,13 @@ Current frontend-facing endpoints:
 
 - `GET /health`
 - `POST /chat`
+- `POST /chat/retry`
 - `GET /chat/sessions`
+- `GET /chat/sessions/search?q={query}`
 - `GET /chat/sessions/{session_id}`
 - `PUT /chat/sessions/{session_id}`
-- `GET /usage`
+- `GET /dashboard/usage`
+- `GET /ui/config`
 
 Versioned aliases also exist under `/api/v1` for integration clients. Existing
 frontend calls can stay unversioned.
@@ -79,8 +82,8 @@ If `DATABASE_URL` is absent:
 - Routing is auto-only in the UI. Do not restore manual local/cloud selectors.
 - The composer should show an `Auto` badge, not a route dropdown.
 - Completed assistant messages should show both Copy and Retry actions.
-- Retry should resend the original user turn through `POST /chat`, not duplicate
-  stale assistant messages.
+- Retry should resend the original user turn through `POST /chat/retry`, not
+  duplicate stale assistant messages.
 - The history rail should use PostgreSQL-backed endpoints when available and
   fall back to local draft behavior when unavailable.
 

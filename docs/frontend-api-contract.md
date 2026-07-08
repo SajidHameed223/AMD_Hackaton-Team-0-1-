@@ -62,10 +62,37 @@ Versioned aliases:
 
 - `GET /api/v1/health`
 - `POST /api/v1/chat`
+- `POST /api/v1/chat/retry`
 - `GET /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions/search?q={query}`
 - `GET /api/v1/chat/sessions/{session_id}`
 - `PUT /api/v1/chat/sessions/{session_id}`
 - `GET /api/v1/usage`
+- `GET /api/v1/dashboard/usage`
+- `GET /api/v1/ui/config`
+
+## UI Function to Endpoint Map
+
+This table is the integration checklist by UI function.
+
+| UI function | Method | Path | Versioned path | Backend needed? |
+| --- | --- | --- | --- | --- |
+| Top-bar API/database status | `GET` | `/health` | `/api/v1/health` | Yes |
+| Composer Send | `POST` | `/chat` | `/api/v1/chat` | Yes |
+| Assistant Retry button | `POST` | `/chat/retry` | `/api/v1/chat/retry` | Yes |
+| History Browse button | `GET` | `/chat/sessions` | `/api/v1/chat/sessions` | Yes |
+| History Search input | `GET` | `/chat/sessions/search?q={query}` | `/api/v1/chat/sessions/search?q={query}` | Yes |
+| Open old chat | `GET` | `/chat/sessions/{session_id}` | `/api/v1/chat/sessions/{session_id}` | Yes |
+| Persist active chat | `PUT` | `/chat/sessions/{session_id}` | `/api/v1/chat/sessions/{session_id}` | Yes |
+| Dashboard Usage tab | `GET` | `/dashboard/usage` | `/api/v1/dashboard/usage` | Yes |
+| Machine-readable UI map | `GET` | `/ui/config` | `/api/v1/ui/config` | Yes |
+| Copy assistant response | `CLIENT` | browser clipboard | browser clipboard | No |
+| Copy code block | `CLIENT` | browser clipboard | browser clipboard | No |
+| New chat empty draft | `CLIENT` | local draft until first save | local draft until first save | No |
+| LaTeX/code rendering | `CLIENT` | Markdown renderer | Markdown renderer | No |
+
+`GET /ui/config` returns this same mapping as JSON so integration clients can
+discover the current paths programmatically.
 
 ## Health
 
@@ -138,6 +165,27 @@ Notes:
   shape above.
 - If the configured backend is unreachable, FastAPI returns `502`.
 
+## Retry Chat Reply
+
+Purpose: explicit path for the assistant Retry button.
+
+Request:
+
+```http
+POST /chat/retry
+Content-Type: application/json
+```
+
+Body: same shape as `POST /chat`.
+
+Response: same shape as `POST /chat`.
+
+Notes:
+
+- The frontend calls this route for retry so Hero can wire or test retry
+  separately from first-send chat traffic.
+- `POST /api/v1/chat/retry` is the versioned alias.
+
 ## List Chat Sessions
 
 Purpose: left history rail.
@@ -169,6 +217,24 @@ Empty/error behavior:
 - Empty database returns `{ "sessions": [] }`.
 - Missing `DATABASE_URL` returns `503`.
 - `GET /api/v1/chat/sessions` is the versioned alias.
+
+## Search Chat Sessions
+
+Purpose: history search input.
+
+Request:
+
+```http
+GET /chat/sessions/search?q=database
+```
+
+Response: same shape as `GET /chat/sessions`.
+
+Behavior:
+
+- Searches saved session `title` and `preview`.
+- Empty `q` returns recent sessions.
+- `GET /api/v1/chat/sessions/search?q={query}` is the versioned alias.
 
 ## Read Chat Session
 
@@ -272,7 +338,7 @@ Purpose: dashboard KPIs, charts, model table, and budget meter.
 Request:
 
 ```http
-GET /usage
+GET /dashboard/usage
 ```
 
 Response shape:
@@ -328,16 +394,63 @@ Empty/error behavior:
 
 - Missing `DATABASE_URL` returns a valid zeroed dashboard payload.
 - Empty chat history returns a valid zeroed dashboard payload.
-- `GET /api/v1/usage` is the versioned alias.
+- `GET /usage` remains available as a compatibility alias.
+- `GET /api/v1/dashboard/usage` is the versioned dashboard path.
+- `GET /api/v1/usage` is also available as a compatibility alias.
+
+## UI Config
+
+Purpose: machine-readable endpoint map for frontend/backend integration.
+
+Request:
+
+```http
+GET /ui/config
+```
+
+Response shape:
+
+```json
+{
+  "apiVersion": "v1",
+  "endpoints": [
+    {
+      "label": "Dashboard usage",
+      "method": "GET",
+      "path": "/dashboard/usage",
+      "versionedPath": "/api/v1/dashboard/usage",
+      "description": "Dashboard KPIs, charts, model table, and budget meter."
+    },
+    {
+      "label": "New chat empty draft",
+      "method": "CLIENT",
+      "path": "local-draft",
+      "versionedPath": "local-draft",
+      "description": "Client-only empty session until the first saved message."
+    },
+    {
+      "label": "LaTeX/code rendering",
+      "method": "CLIENT",
+      "path": "markdown-renderer",
+      "versionedPath": "markdown-renderer",
+      "description": "Client-only Markdown, LaTeX, and code-block rendering."
+    }
+  ]
+}
+```
+
+`GET /api/v1/ui/config` is the versioned alias.
 
 ## Frontend Integration Checklist
 
 - Use `NEXT_PUBLIC_API_URL` as the base URL.
 - Read `/health` on interval for status.
-- Send all composer and retry requests to `POST /chat`.
+- Send composer requests to `POST /chat`.
+- Send retry requests to `POST /chat/retry`.
 - Save the active chat with `PUT /chat/sessions/{session_id}` after messages change.
 - Load the rail with `GET /chat/sessions`.
+- Search saved chats with `GET /chat/sessions/search?q={query}`.
 - Lazy-load full messages with `GET /chat/sessions/{session_id}` when a saved chat is opened.
-- Render dashboard from `GET /usage`.
+- Render dashboard from `GET /dashboard/usage` or compatibility path `GET /usage`.
 - Treat `503` from chat history as "Local draft" mode.
 - Log `X-Request-ID` when reporting backend integration bugs.

@@ -78,13 +78,16 @@ python -m uvicorn app.main:app --reload
 The frontend reads and writes:
 
 - `POST /chat` for one auto-routed assistant reply
+- `POST /chat/retry` for the assistant Retry button
 - `GET /chat/sessions` for history summaries
+- `GET /chat/sessions/search?q={query}` for history search
 - `GET /chat/sessions/{session_id}` for one full conversation
 - `PUT /chat/sessions/{session_id}` to upsert a conversation
-- `GET /usage` for dashboard metrics shaped from saved chat history
+- `GET /dashboard/usage` for dashboard metrics shaped from saved chat history
+- `GET /ui/config` for a machine-readable UI function to endpoint map
 
 Versioned aliases exist under `/api/v1` for backend integration clients, for
-example `POST /api/v1/chat` and `GET /api/v1/chat/sessions`.
+example `POST /api/v1/chat` and `GET /api/v1/dashboard/usage`.
 
 For the copy-paste integration contract, see
 `docs/frontend-api-contract.md`. FastAPI also exposes live interactive docs at

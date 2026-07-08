@@ -4,10 +4,12 @@
  * Backend endpoints the frontend consumes (see frontend/README.md):
  *   GET  /health  -> { status: "ok", database: "ok" | "unavailable" | "not_configured" }
  *   POST /chat    -> SSE stream of ChatStreamEvent, or a plain ChatResponse JSON
+ *   POST /chat/retry -> same shape as /chat for the Retry button
  *   GET  /chat/sessions -> saved chat summaries from PostgreSQL
+ *   GET  /chat/sessions/search?q=... -> saved chat search from PostgreSQL
  *   GET  /chat/sessions/:id -> saved chat detail from PostgreSQL
  *   PUT  /chat/sessions/:id -> upsert one chat session into PostgreSQL
- *   GET  /usage   -> UsageSummary for the dashboard
+ *   GET  /dashboard/usage -> UsageSummary for the dashboard
  *
  * If an endpoint is unreachable, the frontend silently falls back to demo data.
  */
@@ -38,7 +40,7 @@ export interface ChatResponse {
   latency_ms: number;
 }
 
-/** Server-sent events emitted by POST /chat when streaming. */
+/** Server-sent events emitted by POST /chat or /chat/retry when streaming. */
 export type ChatStreamEvent =
   | { type: "route"; route: Route; model: string }
   | { type: "delta"; text: string }

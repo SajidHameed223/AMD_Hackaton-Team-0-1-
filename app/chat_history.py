@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 import psycopg2
 from psycopg2.extensions import connection as PgConnection
 from psycopg2.extras import RealDictCursor, execute_batch
@@ -27,9 +27,35 @@ router = APIRouter(prefix="/chat", tags=["chat history"])
     responses={503: {"model": ErrorResponse}},
 )
 def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
+    return _list_sessions(db=db, q=None)
+
+
+@router.get(
+    "/sessions/search",
+    response_model=ChatSessionsResponse,
+    summary="Search saved chat sessions",
+    description="Searches saved session titles and previews for the history search box.",
+    responses={503: {"model": ErrorResponse}},
+)
+def search_sessions(
+    q: str = Query(default="", description="Case-insensitive title/preview search."),
+    db: PgConnection = Depends(get_db),
+) -> ChatSessionsResponse:
+    return _list_sessions(db=db, q=q)
+
+
+def _list_sessions(db: PgConnection, q: str | None) -> ChatSessionsResponse:
+    search = (q or "").strip()
+    params: tuple = ()
+    where_clause = ""
+    if search:
+        where_clause = "where s.title ilike %s or s.preview ilike %s"
+        pattern = f"%{search}%"
+        params = (pattern, pattern)
+
     with db.cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
-            """
+            f"""
             select
                 s.id,
                 s.title,
@@ -38,10 +64,12 @@ def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
                 count(m.id)::int as "messageCount"
             from chat_sessions s
             left join chat_messages m on m.session_id = s.id
+            {where_clause}
             group by s.id
             order by s.updated_at desc
             limit 50
-            """
+            """,
+            params,
         )
         rows = cursor.fetchall()
     return ChatSessionsResponse(

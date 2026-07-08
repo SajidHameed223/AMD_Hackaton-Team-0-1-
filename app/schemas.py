@@ -23,6 +23,19 @@ class HealthResponse(BaseModel):
     requestId: str | None = None
 
 
+class UiEndpoint(BaseModel):
+    label: str
+    method: str
+    path: str
+    versionedPath: str
+    description: str
+
+
+class UiConfigResponse(BaseModel):
+    apiVersion: str
+    endpoints: list[UiEndpoint]
+
+
 class RouteVerdictSchema(BaseModel):
     route: Literal["local", "cloud"] = Field(
         description="Route selected by backend/router."

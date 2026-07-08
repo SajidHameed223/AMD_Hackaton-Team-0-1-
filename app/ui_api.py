@@ -10,7 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from app.config import get_chat_backend_url, get_model_name
 from app.database import get_connection
-from app.schemas import ChatRequest, ChatResponse, ErrorResponse, UsageSummary
+from app.schemas import ChatRequest, ChatResponse, ErrorResponse, UiConfigResponse, UsageSummary
 
 
 router = APIRouter()
@@ -51,6 +51,21 @@ def chat(payload: ChatRequest) -> ChatResponse:
     return ChatResponse(**reply)
 
 
+@router.post(
+    "/chat/retry",
+    response_model=ChatResponse,
+    tags=["chat"],
+    summary="Retry an auto-routed assistant reply",
+    description=(
+        "Same payload and response as `POST /chat`, exposed as an explicit path "
+        "for the assistant message Retry button."
+    ),
+    responses={422: {"model": ErrorResponse}, 502: {"model": ErrorResponse}},
+)
+def retry_chat(payload: ChatRequest) -> ChatResponse:
+    return chat(payload)
+
+
 @router.get(
     "/usage",
     response_model=UsageSummary,
@@ -64,6 +79,107 @@ def chat(payload: ChatRequest) -> ChatResponse:
 )
 def usage() -> UsageSummary:
     return _build_usage_summary()
+
+
+@router.get(
+    "/dashboard/usage",
+    response_model=UsageSummary,
+    tags=["usage"],
+    summary="Read dashboard usage metrics",
+    description="Dashboard-specific alias for `GET /usage`.",
+)
+def dashboard_usage() -> UsageSummary:
+    return usage()
+
+
+@router.get(
+    "/ui/config",
+    response_model=UiConfigResponse,
+    tags=["ui"],
+    summary="List frontend UI actions and API paths",
+    description="Machine-readable map of UI actions to FastAPI paths for integration work.",
+)
+def ui_config() -> UiConfigResponse:
+    endpoints = [
+        {
+            "label": "Health/status badge",
+            "method": "GET",
+            "path": "/health",
+            "versionedPath": "/api/v1/health",
+            "description": "Backend and database status for the top bar.",
+        },
+        {
+            "label": "Send chat message",
+            "method": "POST",
+            "path": "/chat",
+            "versionedPath": "/api/v1/chat",
+            "description": "Composer send action; auto-routes through backend.",
+        },
+        {
+            "label": "Retry assistant message",
+            "method": "POST",
+            "path": "/chat/retry",
+            "versionedPath": "/api/v1/chat/retry",
+            "description": "Retry button beside Copy; same contract as chat send.",
+        },
+        {
+            "label": "History browse",
+            "method": "GET",
+            "path": "/chat/sessions",
+            "versionedPath": "/api/v1/chat/sessions",
+            "description": "Recent chats in the left rail.",
+        },
+        {
+            "label": "History search",
+            "method": "GET",
+            "path": "/chat/sessions/search?q={query}",
+            "versionedPath": "/api/v1/chat/sessions/search?q={query}",
+            "description": "Search chat titles/previews.",
+        },
+        {
+            "label": "Open saved chat",
+            "method": "GET",
+            "path": "/chat/sessions/{session_id}",
+            "versionedPath": "/api/v1/chat/sessions/{session_id}",
+            "description": "Load full messages for one chat.",
+        },
+        {
+            "label": "Save active chat",
+            "method": "PUT",
+            "path": "/chat/sessions/{session_id}",
+            "versionedPath": "/api/v1/chat/sessions/{session_id}",
+            "description": "Persist session metadata and messages.",
+        },
+        {
+            "label": "Dashboard usage",
+            "method": "GET",
+            "path": "/dashboard/usage",
+            "versionedPath": "/api/v1/dashboard/usage",
+            "description": "Dashboard KPIs, charts, model table, and budget meter.",
+        },
+        {
+            "label": "Copy assistant/code text",
+            "method": "CLIENT",
+            "path": "clipboard",
+            "versionedPath": "clipboard",
+            "description": "Client-only browser clipboard action; no backend call.",
+        },
+        {
+            "label": "New chat empty draft",
+            "method": "CLIENT",
+            "path": "local-draft",
+            "versionedPath": "local-draft",
+            "description": "Client-only empty session until the first saved message.",
+        },
+        {
+            "label": "LaTeX/code rendering",
+            "method": "CLIENT",
+            "path": "markdown-renderer",
+            "versionedPath": "markdown-renderer",
+            "description": "Client-only Markdown, LaTeX, and code-block rendering.",
+        },
+    ]
+    return UiConfigResponse(apiVersion="v1", endpoints=endpoints)
 
 
 def _pick_reply(message: str) -> dict:

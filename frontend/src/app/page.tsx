@@ -123,6 +123,10 @@ export default function Home() {
   const [sessions, setSessions] = useState<ChatSession[]>(() => [emptySession()]);
   const [activeSessionId, setActiveSessionId] = useState(() => sessions[0].id);
   const [historyQuery, setHistoryQuery] = useState("");
+  const [searchResult, setSearchResult] = useState<{
+    query: string;
+    sessions: ChatSession[];
+  } | null>(null);
   const [historyLive, setHistoryLive] = useState<boolean | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [lastVerdict, setLastVerdict] = useState<RouteVerdict | null>(null);
@@ -316,7 +320,7 @@ export default function Home() {
           setLastVerdict(verdict);
           setPendingId(null);
         },
-      });
+      }, "/chat/retry");
     },
     [messages, patchMessage, pendingId, updateActiveMessages],
   );
@@ -326,6 +330,7 @@ export default function Home() {
     if ((activeSession?.messages.length ?? 0) === 0) {
       setView("chat");
       setHistoryQuery("");
+      setSearchResult(null);
       return;
     }
     const session = newSession();
@@ -334,6 +339,7 @@ export default function Home() {
     setView("chat");
     setLastVerdict(null);
     setHistoryQuery("");
+    setSearchResult(null);
   }, [activeSession, pendingId]);
 
   const openSession = useCallback(
@@ -341,7 +347,12 @@ export default function Home() {
       if (pendingId) return;
       setActiveSessionId(id);
       setView("chat");
-      const session = sessions.find((item) => item.id === id);
+      const session =
+        sessions.find((item) => item.id === id) ??
+        searchResult?.sessions.find((item) => item.id === id);
+      if (session && !sessions.some((item) => item.id === id)) {
+        setSessions((current) => [session, ...current]);
+      }
       const lastAssistant = [...(session?.messages ?? [])]
         .reverse()
         .find((item) => item.role === "assistant" && item.verdict);
@@ -360,17 +371,41 @@ export default function Home() {
         });
       }
     },
-    [historyLive, pendingId, sessions],
+    [historyLive, pendingId, searchResult, sessions],
   );
+
+  useEffect(() => {
+    const q = historyQuery.trim();
+    if (!historyLive || !q) {
+      return;
+    }
+    let alive = true;
+    const t = window.setTimeout(() => {
+      void fetchChatSessionSummaries(q).then((result) => {
+        if (!alive) return;
+        setHistoryLive(result.live);
+        setSearchResult(
+          result.live ? { query: q, sessions: result.sessions.map(fromSummary) } : null,
+        );
+      });
+    }, 250);
+    return () => {
+      alive = false;
+      window.clearTimeout(t);
+    };
+  }, [historyLive, historyQuery]);
 
   const filteredSessions = useMemo(() => {
     const q = historyQuery.trim().toLowerCase();
-    const sorted = [...sessions].sort((a, b) => b.updatedAt - a.updatedAt);
-    if (!q) return sorted;
+    const remoteSessions =
+      searchResult?.query.toLowerCase() === q ? searchResult.sessions : null;
+    const source = remoteSessions ?? sessions;
+    const sorted = [...source].sort((a, b) => b.updatedAt - a.updatedAt);
+    if (!q || remoteSessions) return sorted;
     return sorted.filter((session) =>
       `${session.title} ${session.preview}`.toLowerCase().includes(q),
     );
-  }, [historyQuery, sessions]);
+  }, [historyQuery, searchResult, sessions]);
 
   const scrollRef = useAutoScroll(messages);
 
