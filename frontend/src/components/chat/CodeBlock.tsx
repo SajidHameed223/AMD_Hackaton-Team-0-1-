@@ -79,6 +79,39 @@ export function CopyButton({
   );
 }
 
+export function RetryButton({
+  onRetry,
+  disabled = false,
+  surface = "dark",
+}: {
+  onRetry: () => void;
+  disabled?: boolean;
+  surface?: "dark" | "light";
+}) {
+  const cls = [
+    "o1-copy",
+    "o1-retry",
+    surface === "light" ? "o1-copy--light" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return (
+    <button className={cls} onClick={onRetry} disabled={disabled}>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden>
+        <path
+          d="M13.2 7.1a5.2 5.2 0 1 0-1.5 4.2M13.2 7.1V3.8m0 3.3H9.9"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Retry
+    </button>
+  );
+}
+
 /* ---- mini syntax highlighter → o1-tok-* spans ---- */
 const KEYWORDS = new Set([
   // shared

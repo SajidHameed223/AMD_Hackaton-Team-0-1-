@@ -16,6 +16,18 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+For database-backed chat history, run the FastAPI backend with `DATABASE_URL`
+configured and migrations applied from the repository root. The frontend uses
+`NEXT_PUBLIC_API_URL` when the API is not on `http://localhost:8000`:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+```
+
+If the backend or Postgres is not available, the history rail falls back to a
+temporary in-memory draft and labels itself `Local draft`. The composer is
+auto-routing only; it shows an `Auto` badge instead of manual model controls.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

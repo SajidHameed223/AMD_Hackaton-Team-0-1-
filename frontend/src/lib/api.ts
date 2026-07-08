@@ -1,9 +1,11 @@
 import { DEMO_USAGE, pickDemoReply } from "./demo";
 import type {
   ChatStreamEvent,
+  ChatSessionRecord,
+  ChatSessionSummary,
   ChatTurn,
+  MessageModel,
   Route,
-  RoutePreference,
   UsageSummary,
 } from "./types";
 
@@ -33,6 +35,55 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
+export async function fetchChatSessionSummaries(): Promise<{
+  sessions: ChatSessionSummary[];
+  live: boolean;
+}> {
+  try {
+    const data = await fetchJson<{ sessions: ChatSessionSummary[] }>(
+      "/chat/sessions",
+      { signal: AbortSignal.timeout(3000) },
+    );
+    return { sessions: data.sessions, live: true };
+  } catch {
+    return { sessions: [], live: false };
+  }
+}
+
+export async function fetchChatSession(
+  sessionId: string,
+): Promise<ChatSessionRecord | null> {
+  try {
+    return await fetchJson<ChatSessionRecord>(`/chat/sessions/${sessionId}`, {
+      signal: AbortSignal.timeout(3000),
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function saveChatSession(session: {
+  id: string;
+  title: string;
+  preview: string;
+  messages: MessageModel[];
+}): Promise<boolean> {
+  try {
+    await fetchJson<ChatSessionRecord>(`/chat/sessions/${session.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: session.title,
+        preview: session.preview,
+        messages: session.messages,
+      }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Send a chat turn. Prefers the FastAPI backend; when /chat is missing or
  * unreachable, falls back to the demo router simulation so the app keeps
@@ -41,10 +92,8 @@ export async function checkHealth(): Promise<boolean> {
 export async function sendChat(
   message: string,
   history: ChatTurn[],
-  routePreference: RoutePreference,
   cb: ChatCallbacks,
 ): Promise<void> {
-  const forcedRoute = routePreference === "auto" ? undefined : routePreference;
   try {
     const res = await fetch(`${API_BASE}/chat`, {
       method: "POST",
@@ -52,7 +101,7 @@ export async function sendChat(
         "Content-Type": "application/json",
         Accept: "text/event-stream, application/json",
       },
-      body: JSON.stringify({ message, history, routePreference: forcedRoute }),
+      body: JSON.stringify({ message, history }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -77,7 +126,7 @@ export async function sendChat(
     cb.onDelta(reply);
     cb.onDone(route, model, data.latency_ms ?? 0);
   } catch {
-    await demoChat(message, forcedRoute, cb);
+    await demoChat(message, cb);
   }
 }
 
@@ -118,10 +167,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function demoChat(
   message: string,
-  routePreference: Route | undefined,
   cb: ChatCallbacks,
 ): Promise<void> {
-  const reply = pickDemoReply(message, routePreference);
+  const reply = pickDemoReply(message);
   await sleep(700 + Math.random() * 450);
   cb.onRoute(reply.route, reply.model);
   // stream in word-ish chunks, faster for the "fast local" feel

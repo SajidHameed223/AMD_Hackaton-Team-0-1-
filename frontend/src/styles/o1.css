@@ -791,6 +791,10 @@
 .o1-copy--light.o1-copy--copied {
   color: var(--o1-good);
 }
+.o1-retry:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 /* ---- Math ---- */
 .o1-math {
@@ -925,45 +929,19 @@
   color: var(--o1-ink-3);
 }
 
-.o1-model-switch {
+.o1-auto-route {
   display: inline-flex;
   align-items: center;
-  padding: 3px;
+  justify-content: center;
+  height: 28px;
+  padding: 0 11px;
   border-radius: var(--o1-r-pill);
-  background: var(--o1-surface-2);
+  background: var(--o1-surface);
   border: 1px solid var(--o1-border);
-}
-.o1-model-switch__item {
-  height: 24px;
-  padding: 0 9px;
-  border-radius: var(--o1-r-pill);
   font-size: var(--o1-text-xs);
   font-weight: 700;
-  color: var(--o1-ink-2);
-  transition:
-    background-color var(--o1-dur-fast) var(--o1-ease-out),
-    color var(--o1-dur-fast) var(--o1-ease-out),
-    box-shadow var(--o1-dur-fast) var(--o1-ease-out);
-}
-.o1-model-switch__item:hover {
-  color: var(--o1-ink);
-}
-.o1-model-switch__item--active {
-  background: var(--o1-surface);
   color: var(--o1-cyan-700);
   box-shadow: var(--o1-shadow-sm);
-}
-.o1-model-switch__item--local.o1-model-switch__item--active {
-  background: var(--o1-sun-200);
-  color: #7a5200;
-}
-.o1-model-switch__item--cloud.o1-model-switch__item--active {
-  background: var(--o1-cyan-100);
-  color: var(--o1-cyan-800);
-}
-.o1-model-switch__item:disabled {
-  opacity: 0.55;
-  pointer-events: none;
 }
 
 /* ---- RouteBadge — the router's verdict ---- */

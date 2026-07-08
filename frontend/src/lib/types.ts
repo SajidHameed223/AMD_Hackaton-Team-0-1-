@@ -2,15 +2,17 @@
  * O(1) frontend ↔ FastAPI contract.
  *
  * Backend endpoints the frontend consumes (see frontend/README.md):
- *   GET  /health  -> { status: "ok" }
+ *   GET  /health  -> { status: "ok", database: "ok" | "unavailable" | "not_configured" }
  *   POST /chat    -> SSE stream of ChatStreamEvent, or a plain ChatResponse JSON
- *   GET  /usage   -> UsageSummary
+ *   GET  /chat/sessions -> saved chat summaries from PostgreSQL
+ *   GET  /chat/sessions/:id -> saved chat detail from PostgreSQL
+ *   PUT  /chat/sessions/:id -> upsert one chat session into PostgreSQL
+ *   GET  /usage   -> UsageSummary for the dashboard
  *
- * Until an endpoint exists, the frontend silently runs in demo mode.
+ * If an endpoint is unreachable, the frontend silently falls back to demo data.
  */
 
 export type Route = "local" | "cloud";
-export type RoutePreference = "auto" | Route;
 
 export interface RouteVerdict {
   route: Route;
@@ -26,7 +28,6 @@ export interface ChatTurn {
 export interface ChatRequest {
   message: string;
   history: ChatTurn[];
-  routePreference?: Route;
 }
 
 /** Non-streaming reply shape. */
@@ -81,4 +82,20 @@ export interface MessageModel {
   content: string;
   status: "routing" | "streaming" | "done";
   verdict?: RouteVerdict;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  preview: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface ChatSessionRecord {
+  id: string;
+  title: string;
+  preview: string;
+  updatedAt: string;
+  messages: MessageModel[];
 }
