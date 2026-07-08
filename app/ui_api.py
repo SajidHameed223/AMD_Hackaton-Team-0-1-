@@ -10,7 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from app.config import get_chat_backend_url, get_model_name
 from app.database import get_connection
-from app.schemas import ChatRequest, ChatResponse, UsageSummary
+from app.schemas import ChatRequest, ChatResponse, ErrorResponse, UsageSummary
 
 
 router = APIRouter()
@@ -25,6 +25,23 @@ router = APIRouter()
         "Accepts the latest user message plus prior turns. The frontend treats "
         "the route as automatic only; no manual local/cloud selector is required."
     ),
+    responses={
+        200: {
+            "description": "Auto-routed assistant reply.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "reply": "Big-O describes how work grows as input grows.",
+                        "route": "cloud",
+                        "model": "cloud-model",
+                        "latency_ms": 840,
+                    }
+                }
+            },
+        },
+        422: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
+    },
 )
 def chat(payload: ChatRequest) -> ChatResponse:
     forwarded = _forward_to_chat_backend(payload)
@@ -43,6 +60,7 @@ def chat(payload: ChatRequest) -> ChatResponse:
         "Returns the complete dashboard payload. With Postgres configured, values "
         "are derived from saved chat history; otherwise a valid zeroed payload is returned."
     ),
+    responses={200: {"description": "Dashboard-ready usage payload."}},
 )
 def usage() -> UsageSummary:
     return _build_usage_summary()

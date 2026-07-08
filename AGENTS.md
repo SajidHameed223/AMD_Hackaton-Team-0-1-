@@ -54,6 +54,9 @@ Current frontend-facing endpoints:
 - `PUT /chat/sessions/{session_id}`
 - `GET /usage`
 
+Versioned aliases also exist under `/api/v1` for integration clients. Existing
+frontend calls can stay unversioned.
+
 ## Database Context
 
 Chat history is PostgreSQL-backed and migratable with Alembic. The repo ships
@@ -88,5 +91,7 @@ If `DATABASE_URL` is absent:
   otherwise.
 - Keep provider-specific names out of generic docs and UI unless the team asks
   to show a concrete configured model name.
+- Preserve `X-Request-ID` and `X-API-Version` response headers when modifying
+  FastAPI middleware; they make frontend/backend debugging easier.
 - `frontend/AGENTS.md` warns that the Next.js version has breaking changes; read
   local Next.js docs before changing framework-specific code.

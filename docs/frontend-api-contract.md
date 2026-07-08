@@ -35,6 +35,38 @@ Each endpoint below follows this format:
 - Response: success payload shape.
 - Empty/error behavior: what the frontend should expect when data is absent.
 
+## Integration Conventions
+
+- Current frontend paths are unversioned for compatibility.
+- Versioned aliases also exist under `/api/v1` for backend integrators.
+- Every response includes:
+  - `X-Request-ID`
+  - `X-API-Version`
+- Clients can send `X-Request-ID`; otherwise FastAPI generates one.
+- Browser clients can read those headers because CORS exposes them.
+- Error responses keep FastAPI's familiar `detail` field and also include an
+  `error` object:
+
+```json
+{
+  "detail": "Chat session not found",
+  "error": {
+    "code": "http_404",
+    "message": "Chat session not found",
+    "requestId": "5f5e0ef4-0e4d-4cf0-9a10-85790fd6d2d6"
+  }
+}
+```
+
+Versioned aliases:
+
+- `GET /api/v1/health`
+- `POST /api/v1/chat`
+- `GET /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions/{session_id}`
+- `PUT /api/v1/chat/sessions/{session_id}`
+- `GET /api/v1/usage`
+
 ## Health
 
 Purpose: top-bar backend/database status.
@@ -50,7 +82,9 @@ Response:
 ```json
 {
   "status": "ok",
-  "database": "ok"
+  "database": "ok",
+  "apiVersion": "v1",
+  "requestId": "5f5e0ef4-0e4d-4cf0-9a10-85790fd6d2d6"
 }
 ```
 
@@ -102,6 +136,7 @@ Notes:
 - If `CHAT_BACKEND_URL` is set, FastAPI forwards this payload to that backend.
   The backend can use any model or router as long as it returns the response
   shape above.
+- If the configured backend is unreachable, FastAPI returns `502`.
 
 ## List Chat Sessions
 
@@ -133,6 +168,7 @@ Empty/error behavior:
 
 - Empty database returns `{ "sessions": [] }`.
 - Missing `DATABASE_URL` returns `503`.
+- `GET /api/v1/chat/sessions` is the versioned alias.
 
 ## Read Chat Session
 
@@ -179,6 +215,7 @@ Empty/error behavior:
 
 - Unknown `session_id` returns `404`.
 - Missing `DATABASE_URL` returns `503`.
+- `GET /api/v1/chat/sessions/{session_id}` is the versioned alias.
 
 ## Save Chat Session
 
@@ -226,6 +263,7 @@ Behavior:
 - Replaces the message list for that session, so retries do not duplicate old
   assistant messages.
 - Invalid message roles or statuses return `422`.
+- `PUT /api/v1/chat/sessions/{session_id}` is the versioned alias.
 
 ## Usage Dashboard
 
@@ -290,6 +328,7 @@ Empty/error behavior:
 
 - Missing `DATABASE_URL` returns a valid zeroed dashboard payload.
 - Empty chat history returns a valid zeroed dashboard payload.
+- `GET /api/v1/usage` is the versioned alias.
 
 ## Frontend Integration Checklist
 
@@ -301,3 +340,4 @@ Empty/error behavior:
 - Lazy-load full messages with `GET /chat/sessions/{session_id}` when a saved chat is opened.
 - Render dashboard from `GET /usage`.
 - Treat `503` from chat history as "Local draft" mode.
+- Log `X-Request-ID` when reporting backend integration bugs.

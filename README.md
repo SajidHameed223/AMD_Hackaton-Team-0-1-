@@ -83,6 +83,9 @@ The frontend reads and writes:
 - `PUT /chat/sessions/{session_id}` to upsert a conversation
 - `GET /usage` for dashboard metrics shaped from saved chat history
 
+Versioned aliases exist under `/api/v1` for backend integration clients, for
+example `POST /api/v1/chat` and `GET /api/v1/chat/sessions`.
+
 For the copy-paste integration contract, see
 `docs/frontend-api-contract.md`. FastAPI also exposes live interactive docs at
 `/docs` and schema JSON at `/openapi.json`.

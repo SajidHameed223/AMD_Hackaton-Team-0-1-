@@ -12,6 +12,7 @@ from app.schemas import (
     ChatSessionDetail,
     ChatSessionSummary,
     ChatSessionsResponse,
+    ErrorResponse,
     SaveChatSessionRequest,
 )
 
@@ -23,6 +24,7 @@ router = APIRouter(prefix="/chat", tags=["chat history"])
     response_model=ChatSessionsResponse,
     summary="List recent chat sessions",
     description="Returns up to 50 saved chat sessions for the left history rail.",
+    responses={503: {"model": ErrorResponse}},
 )
 def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
     with db.cursor(cursor_factory=RealDictCursor) as cursor:
@@ -52,6 +54,7 @@ def list_sessions(db: PgConnection = Depends(get_db)) -> ChatSessionsResponse:
     response_model=ChatSessionDetail,
     summary="Read one chat session",
     description="Returns the full message list for one saved conversation.",
+    responses={404: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
 )
 def get_session(session_id: UUID, db: PgConnection = Depends(get_db)) -> ChatSessionDetail:
     return _load_session(db, session_id)
@@ -65,6 +68,12 @@ def get_session(session_id: UUID, db: PgConnection = Depends(get_db)) -> ChatSes
         "Upserts session metadata and replaces the message list atomically for "
         "the supplied session id."
     ),
+    responses={
+        200: {"description": "Saved chat session detail."},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 def save_session(
     session_id: UUID,
