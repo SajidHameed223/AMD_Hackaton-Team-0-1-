@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local LLM Test Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f1e 0%, #1a1a2e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #ff6b35;
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            color: #ff6b35;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #a0a0a0;
+        }
+
+        .test-form {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid #ff6b35;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 25px rgba(255, 107, 53, 0.15);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #ff6b35;
+            font-weight: 600;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ff6b35;
+            border-radius: 6px;
+            background: rgba(15, 15, 30, 0.8);
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1em;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .form-group textarea:focus {
+            outline: none;
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ff6b35;
+            border-radius: 6px;
+            background: rgba(15, 15, 30, 0.8);
+            color: #e0e0e0;
+            font-size: 1em;
+        }
+
+        .form-group select:focus {
+            outline: none;
+            box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #ff6b35;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-submit {
+            background: #ff6b35;
+            color: white;
+            flex: 1;
+        }
+
+        .btn-submit:hover {
+            background: #ff5522;
+            box-shadow: 0 0 15px rgba(255, 107, 53, 0.5);
+        }
+
+        .btn-submit:disabled {
+            background: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .btn-clear {
+            background: rgba(255, 107, 53, 0.2);
+            color: #ff6b35;
+            border: 1px solid #ff6b35;
+        }
+
+        .btn-clear:hover {
+            background: rgba(255, 107, 53, 0.3);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #ff6b35;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 107, 53, 0.3);
+            border-top: 3px solid #ff6b35;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .response-section {
+            margin-top: 30px;
+        }
+
+        .response-box {
+            background: rgba(30, 30, 50, 0.8);
+            border: 1px solid #00d084;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 0 25px rgba(0, 208, 132, 0.15);
+        }
+
+        .response-title {
+            font-size: 1.3em;
+            color: #00d084;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .response-text {
+            background: rgba(15, 15, 30, 0.8);
+            border-left: 3px solid #00d084;
+            padding: 15px;
+            border-radius: 6px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metric-card {
+            background: rgba(255, 107, 53, 0.1);
+            border: 1px solid #ff6b35;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .metric-label {
+            color: #a0a0a0;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 1.5em;
+            color: #ff6b35;
+            font-weight: bold;
+        }
+
+        .metric-unit {
+            color: #a0a0a0;
+            font-size: 0.7em;
+        }
+
+        .cache-badge {
+            display: inline-block;
+            background: #00d084;
+            color: #0f0f1e;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .error-box {
+            background: rgba(255, 107, 53, 0.1);
+            border: 1px solid #ff6b35;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 0 25px rgba(255, 107, 53, 0.15);
+        }
+
+        .error-title {
+            font-size: 1.3em;
+            color: #ff6b35;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .error-text {
+            background: rgba(15, 15, 30, 0.8);
+            border-left: 3px solid #ff6b35;
+            padding: 15px;
+            border-radius: 6px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .timestamp {
+            color: #a0a0a0;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .info-text {
+            background: rgba(100, 150, 255, 0.1);
+            border-left: 3px solid #4d96ff;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #a0a0a0;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Local LLM Test Interface</h1>
+            <p>Test Gemma inference with custom prompts • Auto-classification • Smart routing • Real-time feedback</p>
+        </div>
+
+        <div class="test-form">
+            <form id="testForm" onsubmit="handleSubmit(event)">
+                <div class="form-group">
+                    <label for="prompt">📝 Enter Your Prompt</label>
+                    <textarea id="prompt" name="prompt" placeholder="E.g., Explain how transformers work in machine learning..." required></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskType">📋 Task Type (Auto-classified if empty)</label>
+                        <select id="taskType" name="taskType">
+                            <option value="">Auto-detect</option>
+                            <option value="summary">Summary</option>
+                            <option value="code">Code</option>
+                            <option value="math">Math</option>
+                            <option value="creative">Creative</option>
+                            <option value="default">Default</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="speedMode">⚡ Speed Mode</label>
+                        <div class="checkbox-group" style="margin-top: 10px;">
+                            <input type="checkbox" id="speedMode" name="speedMode" checked>
+                            <label for="speedMode" style="margin: 0; color: #a0a0a0;">Fast (fewer tokens)</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="userAgent">👤 User ID (optional)</label>
+                        <input type="text" id="userAgent" placeholder="Your ID" style="width: 100%; padding: 10px; border: 1px solid #ff6b35; border-radius: 6px; background: rgba(15, 15, 30, 0.8); color: #e0e0e0;">
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button type="submit" class="btn btn-submit" id="submitBtn">🔄 Generate Response</button>
+                    <button type="button" class="btn btn-clear" onclick="clearForm()">🗑️ Clear</button>
+                </div>
+
+                <div class="info-text">
+                    💡 Tips: Task type will be auto-detected if left empty. Speed mode reduces output tokens for faster responses.
+                </div>
+            </form>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Generating response... <span id="elapsed">0</span>s</p>
+            </div>
+        </div>
+
+        <!-- Response Section -->
+        <div class="response-section hidden" id="responseSection">
+            <div class="response-box">
+                <div class="response-title">✅ Response</div>
+                <div class="response-text" id="responseText"></div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Latency</div>
+                        <div class="metric-value" id="metricLatency">--</div>
+                        <div class="metric-unit">ms</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Model Used</div>
+                        <div class="metric-value" id="metricModel">--</div>
+                        <div class="metric-unit">variant</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Routed To</div>
+                        <div class="metric-value" id="metricRouted">--</div>
+                        <div class="metric-unit">model</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Task Type</div>
+                        <div class="metric-value" id="metricTask">--</div>
+                        <div class="metric-unit">classified</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Prompt Tokens</div>
+                        <div class="metric-value" id="metricPromptTokens">--</div>
+                        <div class="metric-unit">tokens</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Completion Tokens</div>
+                        <div class="metric-value" id="metricCompletionTokens">--</div>
+                        <div class="metric-unit">tokens</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Tokens/Second</div>
+                        <div class="metric-value" id="metricTPS">--</div>
+                        <div class="metric-unit">throughput</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Cache Hit</div>
+                        <div class="metric-value" id="metricCacheHit">--</div>
+                        <div class="metric-unit">status</div>
+                    </div>
+                </div>
+
+                <div class="timestamp">
+                    Requested: <span id="timestamp">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Section -->
+        <div class="response-section hidden" id="errorSection">
+            <div class="error-box">
+                <div class="error-title">❌ Error</div>
+                <div class="error-text" id="errorText"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+
+        function clearForm() {
+            document.getElementById('testForm').reset();
+            document.getElementById('responseSection').classList.add('hidden');
+            document.getElementById('errorSection').classList.add('hidden');
+            document.getElementById('prompt').focus();
+        }
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('responseSection').classList.add('hidden');
+            document.getElementById('errorSection').classList.add('hidden');
+
+            let elapsed = 0;
+            const interval = setInterval(() => {
+                elapsed++;
+                document.getElementById('elapsed').textContent = elapsed;
+            }, 1000);
+
+            return interval;
+        }
+
+        function hideLoading(interval) {
+            clearInterval(interval);
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        async function handleSubmit(event) {
+            event.preventDefault();
+
+            const prompt = document.getElementById('prompt').value.trim();
+            const taskType = document.getElementById('taskType').value || null;
+            const speedMode = document.getElementById('speedMode').checked;
+
+            if (!prompt) {
+                alert('Please enter a prompt');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            const interval = showLoading();
+
+            try {
+                const response = await fetch(`${API_BASE}/local-llm`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-Id': document.getElementById('userAgent').value || 'web-test'
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        task_type: taskType,
+                        speed_mode: speedMode
+                    })
+                });
+
+                hideLoading(interval);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    showError(error.detail || 'Unknown error');
+                    return;
+                }
+
+                const data = await response.json();
+                showResponse(data);
+
+            } catch (error) {
+                hideLoading(interval);
+                showError(`Connection error: ${error.message}\n\nMake sure the API is running at ${API_BASE}`);
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+        function showResponse(data) {
+            document.getElementById('responseText').textContent = data.answer || 'No response';
+            document.getElementById('metricLatency').textContent = data.latency_ms || '--';
+            document.getElementById('metricModel').textContent = (data.model || '--').split('/').pop();
+            document.getElementById('metricRouted').textContent = data.routed_model || data.model || '--';
+            document.getElementById('metricTask').textContent = data.task_type || '--';
+            
+            if (data.token_efficiency) {
+                document.getElementById('metricPromptTokens').textContent = data.token_efficiency.prompt_tokens || '--';
+                document.getElementById('metricCompletionTokens').textContent = data.token_efficiency.completion_tokens || '--';
+                document.getElementById('metricTPS').textContent = Math.round(data.token_efficiency.tokens_per_second || 0);
+            }
+
+            document.getElementById('metricCacheHit').textContent = data._cache_hit ? '✅ HIT' : '❌ MISS';
+            document.getElementById('timestamp').textContent = new Date().toLocaleTimeString();
+
+            document.getElementById('errorSection').classList.add('hidden');
+            document.getElementById('responseSection').classList.remove('hidden');
+        }
+
+        function showError(message) {
+            document.getElementById('errorText').textContent = message;
+            document.getElementById('responseSection').classList.add('hidden');
+            document.getElementById('errorSection').classList.remove('hidden');
+        }
+
+        // Focus on prompt field
+        document.getElementById('prompt').focus();
+    </script>
+</body>
+</html>
