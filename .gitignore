@@ -8,3 +8,9 @@ __pycache__/
 .env
 .env.*
 .vscode/*.code-workspace
+local_test_cli.py
+test_server.py
+probe_reasoning_format.py
+DockerFile
+test_input
+test_output
