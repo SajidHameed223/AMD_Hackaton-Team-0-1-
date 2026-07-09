@@ -47,7 +47,7 @@ _FACTUAL_PAT = re.compile(
 _CLASSIFY_ORDER = [
     (_CODE_DEBUG_PAT, "code_debug"), (_CODE_GEN_PAT, "code_gen"),
     (_SUMMARIZE_PAT, "summarization"), (_SENTIMENT_PAT, "sentiment"),
-    (_NER_PAT, "ner"), (_LOGICAL_PAT, "logical"),
+    (_LOGICAL_PAT, "logical"), (_NER_PAT, "ner"),
     (_MATH_PAT, "math"), (_FACTUAL_PAT, "factual"),
 ]
 
@@ -363,7 +363,7 @@ _SOLVERS = {
     "summarization": solve_summarization, "code_debug": solve_code_debug,
     "logical": solve_logical, "factual": solve_factual,
 }
-_CONF_THRESHOLD = 0.7
+_CONF_THRESHOLD = 0.8
 
 
 def verify_code_debug(fixed_code: str) -> bool:

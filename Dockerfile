@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir \
 # ---------- application code ----------
 COPY app/  app/
 COPY local/ local/
+COPY ml/ ml/
 COPY solve.py .
 
 # ---------- local model weights (optional) ----------
