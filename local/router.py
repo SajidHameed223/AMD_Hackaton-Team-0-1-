@@ -1,43 +1,44 @@
 """
-Model Router: Select optimal Gemma model based on task classification.
+Model Router: Select an appropriate Gemma model based on task classification.
 
-Routing Strategy:
-- simple/summary: Gemma-4-26B (fast, sufficient quality)
-- code: Gemma-4-26B (good for code generation)
-- math: Gemma-4-31B (better reasoning)
-- reasoning: Gemma-4-31B (largest, best quality)
-- creative: Gemma-4-26B (creativity doesn't need size)
-- default: Gemma-4-26B (balanced default)
+Local safe-default strategy:
+- summary/code/creative/default: small model
+- math/reasoning: small model unless you explicitly configure larger models
 
-For latency-sensitive tasks (speed_mode=true), use quantized NVFP4 variant if available.
-
-This router enables the optimization story:
-- Always using 31B: ~3.2s latency
-- Smart routing (26B for simple): ~1.4s latency
-- Same quality, 2x faster with router
+This keeps the app usable on machines that cannot fit the larger Gemma 4 models.
+If you want larger routing targets, set LOCAL_MODEL_PROFILE=balanced or full and
+provide valid GEMMA_*_MODEL environment variables.
 """
 
 import os
 from typing import Tuple
 
+# Profile controls how aggressive routing should be.
+# "small" is the safest default for laptops and low-VRAM systems.
+LOCAL_MODEL_PROFILE = os.getenv("LOCAL_MODEL_PROFILE", "small").lower().strip()
+
 # Available models (from environment or defaults)
 AVAILABLE_MODELS = {
-    "gemma-4-9b": os.getenv("GEMMA_SMALL_MODEL", "google/gemma-4-9b-it"),
-    "gemma-4-26b": os.getenv("GEMMA_MEDIUM_MODEL", "google/gemma-4-26b-a4b-it"),
-    "gemma-4-31b": os.getenv("GEMMA_LARGE_MODEL", "google/gemma-4-31b-it"),
-    "gemma-4-31b-nvfp4": os.getenv(
-        "GEMMA_NVFP4_MODEL", "nvidia/Gemma-4-31B-IT-NVFP4"
+    "gemma-small": os.getenv("GEMMA_SMALL_MODEL", "google/gemma-2-9b-it"),
+    "gemma-medium": os.getenv(
+        "GEMMA_MEDIUM_MODEL", os.getenv("GEMMA_SMALL_MODEL", "google/gemma-2-9b-it")
+    ),
+    "gemma-large": os.getenv(
+        "GEMMA_LARGE_MODEL", os.getenv("GEMMA_MEDIUM_MODEL", os.getenv("GEMMA_SMALL_MODEL", "google/gemma-2-9b-it"))
+    ),
+    "gemma-large-nvfp4": os.getenv(
+        "GEMMA_NVFP4_MODEL", os.getenv("GEMMA_SMALL_MODEL", "google/gemma-2-9b-it")
     ),
 }
 
 # Routing table: task_type → (model_key, is_reasoning_task)
 ROUTING_TABLE = {
-    "summary": ("gemma-4-26b", False),  # Quick extraction, 26B sufficient
-    "code": ("gemma-4-26b", False),  # Code gen, 26B good enough
-    "creative": ("gemma-4-26b", False),  # Creativity ≠ reasoning
-    "math": ("gemma-4-31b", True),  # Math needs better reasoning
-    "reasoning": ("gemma-4-31b", True),  # Explicit reasoning task
-    "default": ("gemma-4-26b", False),  # Safe default
+    "summary": ("gemma-small", False),
+    "code": ("gemma-small", False),
+    "creative": ("gemma-small", False),
+    "math": ("gemma-small", True),
+    "reasoning": ("gemma-small", True),
+    "default": ("gemma-small", False),
 }
 
 
@@ -66,18 +67,29 @@ def route_model(
 
     model_key, is_reasoning = ROUTING_TABLE[task_type]
 
+    # Safe default for constrained local machines: keep everything on the small model.
+    # Larger targets are only used when you explicitly opt in via LOCAL_MODEL_PROFILE.
+    if LOCAL_MODEL_PROFILE == "small":
+        model_key = "gemma-small"
+        is_reasoning = False
+    elif LOCAL_MODEL_PROFILE == "balanced" and task_type in {"math", "reasoning"}:
+        model_key = "gemma-medium"
+        is_reasoning = True
+    elif LOCAL_MODEL_PROFILE == "full" and task_type in {"math", "reasoning"}:
+        model_key = "gemma-large"
+        is_reasoning = True
+
     # For reasoning tasks in speed_mode, try NVFP4 quantized variant
-    if speed_mode and is_reasoning and "nvfp4" in AVAILABLE_MODELS:
-        # Note: NVFP4 only available for 31B
-        if model_key == "gemma-4-31b":
-            model_key = "gemma-4-31b-nvfp4"
+    if speed_mode and is_reasoning and LOCAL_MODEL_PROFILE != "small":
+        if model_key == "gemma-large":
+            model_key = "gemma-large-nvfp4"
 
     model_id = AVAILABLE_MODELS.get(model_key)
 
     if not model_id:
         # Fallback to default if model not configured
-        model_id = AVAILABLE_MODELS.get("gemma-4-26b", "google/gemma-4-26b-a4b-it")
-        model_key = "gemma-4-26b"
+        model_id = AVAILABLE_MODELS.get("gemma-small", "google/gemma-2-9b-it")
+        model_key = "gemma-small"
 
     # Inference config based on model and task
     config = _get_inference_config(model_key, task_type, speed_mode)
@@ -120,7 +132,7 @@ def _get_inference_config(
         config["max_new_tokens"] = min(96, config["max_new_tokens"])
 
     # Model-specific overrides
-    if "31b" in model_key:
+    if "large" in model_key:
         # Larger model can handle more context
         config["use_cache"] = True
     if "nvfp4" in model_key:
@@ -144,12 +156,12 @@ def explain_routing(task_type: str, speed_mode: bool = False) -> dict:
         task_type_normalized = "default"
 
     reason_map = {
-        "summary": "Task requires quick extraction; 26B model sufficient for speed",
-        "code": "Code generation; 26B model proven effective",
-        "creative": "Creativity is orthogonal to model size; 26B optimized",
-        "math": "Math reasoning needs better model; routing to 31B",
-        "reasoning": "Explicit reasoning task; routing to larger 31B model",
-        "default": "No classification; using safe balanced model",
+        "summary": "Task requires quick extraction; using the small local model for safety",
+        "code": "Code generation; using the small local model for safety",
+        "creative": "Creativity does not require a larger model; using the small local model",
+        "math": "Math reasoning can be routed to a larger model only if LOCAL_MODEL_PROFILE allows it",
+        "reasoning": "Reasoning can be routed to a larger model only if LOCAL_MODEL_PROFILE allows it",
+        "default": "No classification; using the small safe local model",
     }
 
     return {
@@ -160,9 +172,9 @@ def explain_routing(task_type: str, speed_mode: bool = False) -> dict:
         "routing_reason": reason_map.get(task_type_normalized, "Custom routing rule"),
         "inference_config": config,
         "expected_latency_improvement": (
-            "~1.4x faster on 26B vs always using 31B"
-            if model_key != "gemma-4-31b"
-            else "Full quality with 31B (may be 1.5x slower than routed avg)"
+            "Small-model safe mode for constrained hardware"
+            if LOCAL_MODEL_PROFILE == "small"
+            else "Balanced routing enabled"
         ),
     }
 
@@ -192,22 +204,20 @@ if __name__ == "__main__":
         print(f"  Reason:     {explanation['routing_reason']}")
 
     print("\n" + "=" * 70)
-    print("LATENCY OPTIMIZATION STORY")
+    print("LOCAL ROUTING STORY")
     print("=" * 70)
     print("""
-Scenario 1: Always use Gemma-4-31B (baseline)
-  - Latency: ~3.2s per inference
-  - VRAM: ~24GB
-  - Quality: Maximum
+Scenario 1: Local safe mode (default)
+  - Latency: depends on the small model you can fit
+  - VRAM: lowest possible
+  - Quality: best effort for constrained hardware
 
-Scenario 2: Smart routing (this router)
-  - Simple tasks (summary, code, creative) → 26B: ~1.4s
-  - Reasoning tasks (math, reasoning) → 31B: ~3.0s
-  - Average latency: ~1.8s (-44% vs baseline)
-  - Average VRAM: ~18GB (-25% vs baseline)
-  - Quality: Same (matched to task needs)
+Scenario 2: Opt-in larger routing
+  - Set LOCAL_MODEL_PROFILE=balanced or full
+  - Provide valid GEMMA_*_MODEL values
+  - Use only on hardware that can fit the larger models
 
-🎯 AMD optimization claim:
-   "Smart routing cuts latency by 44% without sacrificing quality"
+🎯 Default claim:
+  "Safe local routing avoids oversized models on constrained hardware"
 """)
     print("=" * 70)

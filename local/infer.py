@@ -10,14 +10,25 @@ from local.model import get_model_and_tokenizer, get_memory_usage
 from local.profiles import get_profile
 
 # Efficiency upgrade
-def compress_prompt(prompt, task_type):
+def compress_prompt(prompt, task_type, speed_mode: bool = True):
     if task_type == "summary":
-        return "Briefly explain: " + prompt
-    if task_type == "code":
-        return "Write only code for: " + prompt
-    if task_type == "math":
-        return "Solve briefly with key steps: " + prompt
-    return prompt
+        base = "Briefly explain: " + prompt
+    elif task_type == "code":
+        base = "Write only code for: " + prompt
+    elif task_type == "math":
+        base = "Solve briefly with key steps: " + prompt
+    else:
+        base = prompt
+
+    # In fast mode, force concise completion style so outputs fit token caps.
+    if speed_mode:
+        return (
+            "Respond in plain text with no heading, no bullet points, and no markdown. "
+            "Keep the answer to 2 short sentences (max 60 words). "
+            + base
+        )
+
+    return base
 
 # Logging system
 def log_event(data):
@@ -25,7 +36,9 @@ def log_event(data):
         f.write(json.dumps(data) + "\n")
 
 
-def _count_tokens(text: str, tokenizer) -> int:
+def _count_tokens(text: str, tokenizer=None) -> int:
+    if tokenizer is None:
+        return len(text.split())
     return len(tokenizer(text, add_special_tokens=False)["input_ids"])
 
 
@@ -43,7 +56,7 @@ def _build_input_text(prompt: str, tokenizer):
 
 def _token_efficiency_metrics(original_prompt: str, effective_prompt: str, answer: str, latency_ms: int, tokenizer):
     prompt_tokens = _count_tokens(effective_prompt, tokenizer)
-    completion_tokens = _count_tokens(answer)
+    completion_tokens = _count_tokens(answer, tokenizer)
     total_tokens = prompt_tokens + completion_tokens
     tokens_per_second = round((completion_tokens / max(latency_ms, 1)) * 1000, 2)
     ms_per_output_token = round(latency_ms / max(completion_tokens, 1), 2)
@@ -98,12 +111,25 @@ def _local_generate(
         model, tokenizer = get_model_and_tokenizer(model_id)
 
         profile = get_profile(task_type)
-        optimized_prompt = compress_prompt(prompt, task_type)
+        optimized_prompt = compress_prompt(prompt, task_type, speed_mode=speed_mode)
         input_text = _build_input_text(optimized_prompt, tokenizer)
         inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
 
-        # Cap tokens for latency target; speed_mode = ~5-10s on mid-range GPUs
+        # Cap tokens with separate fast/quality controls.
         max_tokens = min(profile["max_tokens"], 96) if speed_mode else profile["max_tokens"]
+
+        speed_cap = int(os.getenv("SPEED_MAX_NEW_TOKENS_CAP", "48"))
+        quality_cap = int(os.getenv("QUALITY_MAX_NEW_TOKENS_CAP", "160"))
+        max_tokens = min(max_tokens, speed_cap if speed_mode else quality_cap)
+
+        # Backward-compatible global cap override if explicitly provided.
+        legacy_cap = os.getenv("MAX_NEW_TOKENS_CAP")
+        if legacy_cap is not None:
+            max_tokens = min(max_tokens, int(legacy_cap))
+
+        # Hard cap for CPU/offloaded execution so requests stay responsive.
+        if not torch.cuda.is_available():
+            max_tokens = min(max_tokens, int(os.getenv("CPU_MAX_NEW_TOKENS", "24")))
 
         with torch.inference_mode():
             outputs = model.generate(
@@ -125,6 +151,7 @@ def _local_generate(
         efficiency = _token_efficiency_metrics(
             prompt, optimized_prompt, response, latency_ms, tokenizer
         )
+        possibly_truncated = efficiency["completion_tokens"] >= max_tokens
 
         log_event(
             {
@@ -138,13 +165,15 @@ def _local_generate(
         )
 
         # Return actual model ID
-        actual_model_id = model_id or os.getenv("MODEL_NAME", "google/gemma-4-26b-a4b-it")
+        actual_model_id = model_id or os.getenv("MODEL_NAME", "google/gemma-2-9b-it")
 
         return {
             "answer": response,
             "latency_ms": latency_ms,
             "model": actual_model_id,
             "speed_mode": speed_mode,
+            "max_new_tokens_used": max_tokens,
+            "possibly_truncated": possibly_truncated,
             "token_efficiency": efficiency,
         }
 
@@ -182,7 +211,7 @@ def _cloud_generate(prompt: str, task_type: str = "default"):
             "model": model_name,
         }
 
-    optimized_prompt = compress_prompt(prompt, task_type)
+    optimized_prompt = compress_prompt(prompt, task_type, speed_mode=True)
     payload = {
         "model": model_name,
         "messages": _build_messages(optimized_prompt),

@@ -24,9 +24,16 @@ class ModelManager:
     def __init__(self):
         self.loaded_models = {}  # model_id → (model, tokenizer)
         self.default_model_id = os.getenv(
-            "MODEL_NAME", "google/gemma-4-26b-a4b-it"
+            "MODEL_NAME", "google/gemma-2-9b-it"  # Changed from gemma-4-9b-it (doesn't exist)
         )
         self._print_system_info()
+
+    @staticmethod
+    def _env_flag(name: str, default: bool = True) -> bool:
+        raw = os.getenv(name)
+        if raw is None:
+            return default
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
 
     def _print_system_info(self):
         """Print GPU/system info once at startup."""
@@ -62,16 +69,47 @@ class ModelManager:
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            device_map="auto",
-            torch_dtype=(
-                torch.bfloat16 if torch.cuda.is_available() else torch.float32
-            ),
-            trust_remote_code=True,
-        )
+        model = None
+        use_cuda = torch.cuda.is_available()
+        use_4bit = self._env_flag("LOCAL_USE_4BIT", default=True)
 
-        print(f"[Model] Loaded successfully on {model.device}")
+        # Prefer 4-bit quantized CUDA loading for consumer GPUs (e.g., 12GB VRAM).
+        if use_cuda and use_4bit:
+            try:
+                from transformers import BitsAndBytesConfig
+
+                quant_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                    bnb_4bit_compute_dtype=torch.float16,
+                )
+                model = AutoModelForCausalLM.from_pretrained(
+                    model_id,
+                    device_map="cuda:0",
+                    torch_dtype=torch.float16,
+                    quantization_config=quant_config,
+                    low_cpu_mem_usage=True,
+                    trust_remote_code=True,
+                )
+                print("[Model] Using 4-bit quantized CUDA loading")
+            except Exception as e:
+                print(f"[Model] 4-bit load unavailable, falling back: {type(e).__name__}: {e}")
+
+        # Fallback path: keep GPU first, CPU only if CUDA is unavailable.
+        if model is None:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                device_map=("auto" if use_cuda else "cpu"),
+                torch_dtype=(torch.float16 if use_cuda else torch.float32),
+                low_cpu_mem_usage=True,
+                trust_remote_code=True,
+            )
+
+        model_device = next(model.parameters()).device
+        print(f"[Model] Loaded successfully on {model_device}")
+        if hasattr(model, "hf_device_map") and any(v == "cpu" for v in model.hf_device_map.values()):
+            print("[Model] Warning: model is partially offloaded to CPU; latency may increase")
         print(
             f"[Model] Model size: {sum(p.numel() for p in model.parameters()) / 1e9:.2f}B params"
         )
@@ -106,9 +144,8 @@ class ModelManager:
 # Global manager instance
 _manager = ModelManager()
 
-# Load default model at startup
-print(f"[Model] Initializing with default: {_manager.default_model_id}")
-model, tokenizer = _manager.get_model_and_tokenizer()
+# Don't load model at startup - use lazy loading instead
+# Model will be loaded on first API request to /local-llm
 
 
 # ============================================================================
@@ -134,3 +171,18 @@ def get_loaded_models():
 def get_memory_usage():
     """Get current GPU memory usage."""
     return _manager.get_memory_usage()
+
+
+def preload_models(model_ids: list[str] | None = None):
+    """
+    Preload one or more models before serving traffic.
+
+    If model_ids is omitted, this loads the default model from MODEL_NAME.
+    """
+    targets = model_ids or [_manager.default_model_id]
+
+    for model_id in targets:
+        print(f"[Model] Preloading: {model_id}")
+        _manager.get_model_and_tokenizer(model_id)
+
+    return get_loaded_models()

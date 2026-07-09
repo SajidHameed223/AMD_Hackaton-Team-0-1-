@@ -1,9 +1,36 @@
+import os
 import time
 
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from pathlib import Path
+
+
+def _load_local_env_file() -> None:
+    """Load key/value pairs from .env into process env if not already set."""
+    env_path = Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return
+
+    try:
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ.setdefault(key, value)
+    except Exception:
+        # Non-fatal: app can still run with shell-provided env vars.
+        pass
+
+
+_load_local_env_file()
+
 from local.infer import compare_local_vs_cloud, generate, get_recent_efficiency_logs
 from local.classifier import classify_task
 from local.request_logger import log_request, get_request_logs, get_request_statistics
@@ -11,12 +38,35 @@ from local.router import route_model, explain_routing
 from local.cache import get_cached, set_cached, get_cache_stats
 from local.streaming import stream_generate_sse
 from local.dashboard import get_dashboard_metrics_summary
+from local.model import preload_models, get_loaded_models
 
 app = FastAPI(
     title="Local Gemma API",
     version="1.0.0",
     description="Efficient local LLM inference with auto task classification and comprehensive logging.",
 )
+
+# Enable CORS for browser requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, OPTIONS, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
+
+
+@app.on_event("startup")
+def warmup_models():
+    """
+    Phase 4A: Preload the default model before the website starts serving requests.
+
+    This makes startup slower, but first user requests are much faster because
+    the model is already initialized and cached in memory.
+    """
+    print("[Startup] Preloading models before serving the website...")
+    preload_models()
+    print(f"[Startup] Loaded models: {get_loaded_models()}")
 
 
 class Request(BaseModel):
@@ -96,6 +146,7 @@ def local_llm(
             cached_result["_cache_hit"] = True
             cached_result["_actual_latency_ms"] = cached_result["latency_ms"]
             cached_result["latency_ms"] = latency_ms  # Total latency including lookup
+            cached_result["task_type"] = task_type
             return cached_result
 
         # Cache miss: Generate response
@@ -142,6 +193,7 @@ def local_llm(
             "yes" if routed_model_key != result["model"].split("/")[-1] else "same"
         )
         result["_cache_hit"] = False
+        result["task_type"] = task_type
 
         return result
 
