@@ -26,6 +26,7 @@ class FireworksClient:
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        reasoning_effort: str = "none",
     ) -> tuple[str, int]:
         """Returns (answer_text, total_tokens_used)."""
         last_err: Exception | None = None
@@ -39,7 +40,8 @@ class FireworksClient:
                             {"role": "user", "content": user_prompt},
                         ],
                         max_tokens=max_tokens,
-                        temperature=0.2,  # low temp: grading wants correctness, not creativity
+                        temperature=0.2,
+                        reasoning_effort=reasoning_effort,
                     ),
                     timeout=self.per_task_timeout_s,
                 )
