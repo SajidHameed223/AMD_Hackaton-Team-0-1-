@@ -13,12 +13,6 @@ def _log(msg: str) -> None:
 
 
 class FireworksWorker:
-    """
-    One instance per process. Create it once at server startup, reuse
-    it for every task — this is what gives us connection pooling and
-    a shared concurrency limit across all remote-routed tasks.
-    """
-
     def __init__(
         self,
         api_key: str,
@@ -35,14 +29,7 @@ class FireworksWorker:
             per_task_timeout_s=per_task_timeout_s,
         )
         self.plan: ModelPlan = plan_models(allowed_models)
-        # Bounds how many Fireworks calls are in flight at once,
-        # regardless of how many tasks the router fires simultaneously.
         self._sem = asyncio.Semaphore(max_concurrency)
-        # Running total across every call this worker instance has made.
-        # NOT included in handle_task's return value (that stays a
-        # strict {"task_id", "answer"} pair to match the submission
-        # schema) — read worker.total_tokens_used separately if you
-        # want to report/log it, e.g. for a token-efficiency dashboard.
         self.total_tokens_used = 0
         _log(
             f"initialized: cheap={self.plan.cheap_model} "
@@ -51,13 +38,6 @@ class FireworksWorker:
         )
 
     async def handle_task(self, task: dict) -> dict:
-        """
-        Process a single task and return {"task_id", "answer"}.
-        Never raises — the router should be able to asyncio.gather()
-        many of these without one failure cancelling the others.
-        Token usage for this call is added to self.total_tokens_used
-        as a side effect; it is not part of the returned dict.
-        """
         task_id = task.get("task_id", "unknown")
         prompt = task.get("prompt", "")
 
@@ -74,6 +54,7 @@ class FireworksWorker:
                     system_prompt=spec.system_prompt,
                     user_prompt=prompt,
                     max_tokens=spec.max_tokens,
+                    reasoning_effort=spec.reasoning_effort,
                 )
                 self.total_tokens_used += tokens_used
                 if not answer:

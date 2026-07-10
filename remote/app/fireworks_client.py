@@ -17,7 +17,7 @@ class FireworksClient:
         self.per_task_timeout_s = per_task_timeout_s
         self._client = AsyncOpenAI(
             api_key=api_key,
-            base_url=base_url,  # judging proxy — passed in, never hardcoded
+            base_url=base_url,  # judging proxy - passed in, never hardcoded
         )
 
     async def complete(
@@ -26,11 +26,14 @@ class FireworksClient:
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        reasoning_effort: str | None = None,
     ) -> tuple[str, int]:
-        """Returns (answer_text, total_tokens_used)."""
-        last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
+                extra_body = {}
+                if reasoning_effort is not None:
+                    extra_body["reasoning_effort"] = reasoning_effort
+
                 completion = await asyncio.wait_for(
                     self._client.chat.completions.create(
                         model=model,
@@ -40,31 +43,41 @@ class FireworksClient:
                         ],
                         max_tokens=max_tokens,
                         temperature=0.2,  # low temp: grading wants correctness, not creativity
+                        extra_body=extra_body if extra_body else None,
                     ),
                     timeout=self.per_task_timeout_s,
                 )
-                text = completion.choices[0].message.content or ""
+                msg = completion.choices[0].message
+                text = msg.content or ""
+
+                
+                reasoning_leak = getattr(msg, "reasoning_content", None)
+                if reasoning_leak:
+                    pass  # discarded on purpose - do not append to text
+
                 total_tokens = (
                     completion.usage.total_tokens if completion.usage else 0
                 )
                 return text.strip(), total_tokens
             except APIStatusError as e:
-                last_err = e
                 if 400 <= e.status_code < 500:
-                    raise  # don't retry client errors — wastes budget
+                    # If the model rejected reasoning_effort as an unknown
+                    # param, retry once without it rather than failing the
+                    # whole task.
+                    if reasoning_effort is not None and attempt < self.max_retries:
+                        reasoning_effort = None
+                        await asyncio.sleep(0.5 * (2**attempt))
+                        continue
+                    raise
                 if attempt < self.max_retries:
                     await asyncio.sleep(0.5 * (2**attempt))
                     continue
                 raise
-            except (asyncio.TimeoutError, Exception) as e:
-                last_err = e
+            except Exception:
                 if attempt < self.max_retries:
                     await asyncio.sleep(0.5 * (2**attempt))
                     continue
                 raise
-
-        assert last_err is not None
-        raise last_err
 
     async def close(self) -> None:
         await self._client.close()
