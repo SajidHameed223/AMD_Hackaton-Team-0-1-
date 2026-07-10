@@ -14,6 +14,7 @@ COPY ollama-runtime/ollama /usr/local/bin/ollama
 COPY ollama-runtime/lib/ /usr/local/lib/ollama/
 COPY models/ /root/.ollama/models/
 COPY agent.py /app/agent.py
+COPY local_engine/ /app/local_engine/
 COPY entrypoint.sh /app/entrypoint.sh
 COPY tools.json /app/tools.json
 

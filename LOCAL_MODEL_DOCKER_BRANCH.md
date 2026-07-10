@@ -1,6 +1,6 @@
-# Local Model Docker Image Branch
+# Local Model Docker Image
 
-This GitHub branch carries the Track 1 local-model Docker source, deterministic solvers, tool logic, and the exported Docker image tar through Git LFS.
+The main branch carries the Track 1 local-model Docker source, deterministic solvers, tool logic, and the exported Docker image tar through Git LFS.
 
 ## Included In This Branch
 
@@ -62,3 +62,7 @@ and writes:
 ```text
 output/results.json
 ```
+
+## Adaptive Local Engine
+
+See `LOCAL_ENGINE_REPORT.md` for the certified local interface, tool design, and reproducible benchmark commands. The local engine is offline by default and leaves team routing/frontend code untouched.

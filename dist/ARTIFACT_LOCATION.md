@@ -1,6 +1,6 @@
 # Final Shareable Artifact
 
-The GitHub branch `local-model-docker-image` contains the final Track 1 local-model Docker image export as a Git LFS file:
+The GitHub branch `main` contains the final Track 1 local-model Docker image export as a Git LFS file:
 
 ```text
 dist/gemma3-1b-qat-track1.tar
@@ -22,7 +22,7 @@ storage: Git LFS
 
 ```bash
 git lfs install
-git clone --branch local-model-docker-image https://github.com/SajidHameed223/AMD_Hackaton-Team-0-1-.git
+git clone --branch main https://github.com/SajidHameed223/AMD_Hackaton-Team-0-1-.git
 git lfs pull
 ```
 
