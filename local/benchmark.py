@@ -7,13 +7,14 @@ Phase 3 Addition: Model routing comparison
 """
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 
 import torch
 import numpy as np
 
-from local.model import model, tokenizer
+from local.model import get_model_and_tokenizer, get_active_wrapper_info
 from local.infer import _local_generate
 from local.classifier import classify_task
 from local.router import route_model
@@ -31,6 +32,11 @@ BENCHMARK_PROMPTS = [
 ]
 
 
+def _resolve_benchmark_model_id(model_id: str | None = None) -> str:
+    """Pick explicit benchmark model or fall back to configured default."""
+    return model_id or os.getenv("BENCHMARK_MODEL_ID") or os.getenv("MODEL_NAME", "google/gemma-2-9b-it")
+
+
 def _get_memory_info():
     """Get current GPU/CPU memory usage."""
     if torch.cuda.is_available():
@@ -46,7 +52,7 @@ def _get_memory_info():
     }
 
 
-def benchmark_latency(prompts: list[str] = None, num_runs: int = 3) -> dict:
+def benchmark_latency(prompts: list[str] = None, num_runs: int = 3, model_id: str | None = None) -> dict:
     """
     Measure inference latency over multiple runs.
     
@@ -56,13 +62,19 @@ def benchmark_latency(prompts: list[str] = None, num_runs: int = 3) -> dict:
         prompts = BENCHMARK_PROMPTS[:3]
 
     latencies = []
+    target_model_id = _resolve_benchmark_model_id(model_id)
 
     print(f"[Benchmark] Running {len(prompts)} prompts x {num_runs} runs...")
 
     for run in range(num_runs):
         for prompt in prompts:
             try:
-                result = _local_generate(prompt, task_type="default", speed_mode=True)
+                result = _local_generate(
+                    prompt,
+                    task_type="default",
+                    speed_mode=True,
+                    model_id=target_model_id,
+                )
                 latencies.append(result["latency_ms"])
             except Exception as e:
                 print(f"  Error on prompt: {str(e)[:50]}")
@@ -88,7 +100,11 @@ def benchmark_latency(prompts: list[str] = None, num_runs: int = 3) -> dict:
     return result
 
 
-def benchmark_throughput(prompt_length: int = 100, duration_sec: int = 30) -> dict:
+def benchmark_throughput(
+    prompt_length: int = 100,
+    duration_sec: int = 30,
+    model_id: str | None = None,
+) -> dict:
     """
     Measure tokens generated per second.
     
@@ -104,13 +120,19 @@ def benchmark_throughput(prompt_length: int = 100, duration_sec: int = 30) -> di
     total_tokens = 0
     total_time = 0
     inference_count = 0
+    target_model_id = _resolve_benchmark_model_id(model_id)
 
     print(f"[Benchmark] Throughput test ({duration_sec}s)...")
 
     start = time.time()
     while time.time() - start < duration_sec:
         try:
-            result = _local_generate(test_prompt, task_type="default", speed_mode=True)
+            result = _local_generate(
+                test_prompt,
+                task_type="default",
+                speed_mode=True,
+                model_id=target_model_id,
+            )
             total_tokens += result["token_efficiency"]["completion_tokens"]
             total_time += result["latency_ms"]
             inference_count += 1
@@ -132,7 +154,7 @@ def benchmark_throughput(prompt_length: int = 100, duration_sec: int = 30) -> di
     return result
 
 
-def benchmark_memory() -> dict:
+def benchmark_memory(model_id: str | None = None) -> dict:
     """
     Measure peak GPU/CPU memory during inference.
     """
@@ -142,13 +164,20 @@ def benchmark_memory() -> dict:
         torch.cuda.reset_peak_memory_stats()
 
     test_prompt = "Explain machine learning and neural networks in detail."
+    target_model_id = _resolve_benchmark_model_id(model_id)
 
     try:
-        result = _local_generate(test_prompt, task_type="default", speed_mode=True)
+        _local_generate(
+            test_prompt,
+            task_type="default",
+            speed_mode=True,
+            model_id=target_model_id,
+        )
     except Exception as e:
         print(f"  Error: {str(e)[:50]}")
         return {"error": str(e)}
 
+    model, _ = get_model_and_tokenizer(target_model_id)
     model_params = sum(p.numel() for p in model.parameters()) / 1e9
     memory = _get_memory_info()
 
@@ -164,7 +193,11 @@ def benchmark_memory() -> dict:
     return result
 
 
-def benchmark_quality(prompts: list[str] = None, num_samples: int = 3) -> dict:
+def benchmark_quality(
+    prompts: list[str] = None,
+    num_samples: int = 3,
+    model_id: str | None = None,
+) -> dict:
     """
     Measure output quality: length, tokens, response time.
     """
@@ -172,11 +205,17 @@ def benchmark_quality(prompts: list[str] = None, num_samples: int = 3) -> dict:
         prompts = BENCHMARK_PROMPTS[:num_samples]
 
     results = []
+    target_model_id = _resolve_benchmark_model_id(model_id)
     print(f"[Benchmark] Quality assessment ({len(prompts)} samples)...")
 
     for i, prompt in enumerate(prompts):
         try:
-            result = _local_generate(prompt, task_type="default", speed_mode=True)
+            result = _local_generate(
+                prompt,
+                task_type="default",
+                speed_mode=True,
+                model_id=target_model_id,
+            )
             results.append({
                 "prompt_length": len(prompt),
                 "response_length": len(result["answer"]),
@@ -290,7 +329,10 @@ def benchmark_routing(prompts: list[str] = None, num_runs: int = 2) -> dict:
     return result
 
 
-def run_full_benchmark(output_file: str = "benchmark_report.json") -> dict:
+def run_full_benchmark(
+    output_file: str = "benchmark_report.json",
+    model_id: str | None = None,
+) -> dict:
     """
     Run complete benchmark suite and save report.
     
@@ -301,14 +343,19 @@ def run_full_benchmark(output_file: str = "benchmark_report.json") -> dict:
         Full benchmark report dict
     """
     print(f"\n[Benchmark] Starting full benchmark suite at {datetime.now(timezone.utc).isoformat()}\n")
+    target_model_id = _resolve_benchmark_model_id(model_id)
+    model, _ = get_model_and_tokenizer(target_model_id)
+    wrapper_info = get_active_wrapper_info()
 
     report = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "model": {
+            "model_id": target_model_id,
             "name": model.__class__.__name__,
             "device": str(model.device),
             "dtype": str(next(model.parameters()).dtype),
         },
+        "wrapper": wrapper_info,
         "gpu_info": {
             "cuda_available": torch.cuda.is_available(),
             "device_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
@@ -322,10 +369,10 @@ def run_full_benchmark(output_file: str = "benchmark_report.json") -> dict:
     }
 
     # Run each benchmark
-    report["benchmarks"]["latency"] = benchmark_latency()
-    report["benchmarks"]["memory"] = benchmark_memory()
-    report["benchmarks"]["quality"] = benchmark_quality()
-    report["benchmarks"]["throughput"] = benchmark_throughput(duration_sec=15)
+    report["benchmarks"]["latency"] = benchmark_latency(model_id=target_model_id)
+    report["benchmarks"]["memory"] = benchmark_memory(model_id=target_model_id)
+    report["benchmarks"]["quality"] = benchmark_quality(model_id=target_model_id)
+    report["benchmarks"]["throughput"] = benchmark_throughput(duration_sec=15, model_id=target_model_id)
     report["benchmarks"]["routing"] = benchmark_routing()
 
     # Summary

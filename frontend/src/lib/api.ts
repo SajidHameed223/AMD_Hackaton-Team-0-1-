@@ -10,7 +10,7 @@ import type {
 } from "./types";
 
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ?? "";
+  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000";
 
 export interface ChatCallbacks {
   onRoute: (route: Route, model: string) => void;
@@ -131,7 +131,11 @@ export async function sendChat(
     cb.onDelta(reply);
     cb.onDone(route, model, data.latency_ms ?? 0);
   } catch {
-    await demoChat(message, cb);
+    cb.onRoute("local", "backend-unavailable");
+    cb.onDelta(
+      "FastAPI backend is unavailable. Start/connect the backend to continue.",
+    );
+    cb.onDone("local", "backend-unavailable", 0);
   }
 }
 

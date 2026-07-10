@@ -7,15 +7,21 @@ import time
 import urllib.request
 from dataclasses import dataclass
 
+from app.vllm_client import VLLMClient
+
 
 LOCAL_MODEL = os.getenv("LOCAL_MODEL_NAME", "gemma3:1b-it-qat")
 CLOUD_MODEL_LABEL = os.getenv("CLOUD_MODEL_NAME", "Fireworks")
 LOCAL_MODEL_URL = os.getenv("LOCAL_MODEL_API_URL") or os.getenv("OLLAMA_URL") or ""
+VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "").rstrip("/")
+PREFER_VLLM_LOCAL = os.getenv("PREFER_VLLM_LOCAL", "1") != "0"
+VLLM_LOCAL_MODEL_SIZE = os.getenv("VLLM_LOCAL_MODEL_SIZE", "large")
 FIREWORKS_KEY = os.getenv("FIREWORKS_API_KEY", "")
 FIREWORKS_BASE = os.getenv("FIREWORKS_BASE_URL", "").rstrip("/")
 FIREWORKS_MODEL = os.getenv("FIREWORKS_MODEL", "")
 ALLOWED_MODELS = [m.strip() for m in os.getenv("ALLOWED_MODELS", "").split(",") if m.strip()]
 LOCAL_MODEL_TIMEOUT_S = int(os.getenv("LOCAL_MODEL_TIMEOUT_S", "60"))
+_VLLM_CLIENT = VLLMClient() if VLLM_BASE_URL else None
 
 
 @dataclass
@@ -195,6 +201,39 @@ def call_local_model(prompt: str) -> str | None:
     return (data.get("message", {}).get("content") or (data.get("choices") or [{}])[0].get("message", {}).get("content") or "").strip() or None
 
 
+def call_vllm_local_model(prompt: str) -> str | None:
+    if not _VLLM_CLIENT:
+        return None
+    try:
+        response = _VLLM_CLIENT.chat(
+            model_size=VLLM_LOCAL_MODEL_SIZE,
+            message=prompt,
+            max_tokens=256,
+            temperature=0.1,
+        )
+    except Exception:
+        return None
+
+    answer = (response.get("answer") or "").strip()
+    return answer or None
+
+
+def call_local_stack(prompt: str) -> str | None:
+    if PREFER_VLLM_LOCAL:
+        return call_vllm_local_model(prompt) or call_local_model(prompt)
+    return call_local_model(prompt) or call_vllm_local_model(prompt)
+
+
+def local_stack_model_label() -> str:
+    if _VLLM_CLIENT:
+        if VLLM_LOCAL_MODEL_SIZE == "small":
+            return os.getenv("GEMMA_SMALL_MODEL", "gemma-4-small")
+        if VLLM_LOCAL_MODEL_SIZE == "medium":
+            return os.getenv("GEMMA_MEDIUM_MODEL", "gemma-4-medium")
+        return os.getenv("GEMMA_LARGE_MODEL", "gemma-4-large")
+    return LOCAL_MODEL
+
+
 def fallback(prompt: str, decision: Decision) -> str:
     if decision.domain == "summary":
         return "This needs the configured cloud model to satisfy the exact summary constraints reliably."
@@ -207,17 +246,18 @@ def fallback(prompt: str, decision: Decision) -> str:
 
 def answer_chat(message: str) -> dict:
     started = time.perf_counter()
+    local_label = local_stack_model_label()
     direct = deterministic_answer(message)
     if direct:
-        return {"reply": direct, "route": "local", "model": LOCAL_MODEL, "latency_ms": int((time.perf_counter() - started) * 1000)}
+        return {"reply": direct, "route": "local", "model": local_label, "latency_ms": int((time.perf_counter() - started) * 1000)}
 
     decision = route_prompt(message)
     if decision.route == "cloud":
         try:
             return {"reply": call_fireworks(message), "route": "cloud", "model": choose_fireworks_model() or CLOUD_MODEL_LABEL, "latency_ms": int((time.perf_counter() - started) * 1000)}
         except Exception:
-            local = call_local_model(message)
-            return {"reply": local or fallback(message, decision), "route": "local", "model": LOCAL_MODEL, "latency_ms": int((time.perf_counter() - started) * 1000)}
+            local = call_local_stack(message)
+            return {"reply": local or fallback(message, decision), "route": "local", "model": local_label, "latency_ms": int((time.perf_counter() - started) * 1000)}
 
-    local = call_local_model(message)
-    return {"reply": local or fallback(message, decision), "route": "local", "model": LOCAL_MODEL, "latency_ms": int((time.perf_counter() - started) * 1000)}
+    local = call_local_stack(message)
+    return {"reply": local or fallback(message, decision), "route": "local", "model": local_label, "latency_ms": int((time.perf_counter() - started) * 1000)}

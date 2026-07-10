@@ -9,6 +9,7 @@ Phase 4A: Dynamic Model Selection
 """
 
 import os
+import importlib
 from typing import Tuple
 
 import torch
@@ -44,6 +45,28 @@ class ModelManager:
                 f"[Model] VRAM: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB"
             )
 
+    @staticmethod
+    def _get_finetune_adapter_path() -> str | None:
+        """Return adapter path if finetune wrapper is enabled and configured."""
+        enabled = ModelManager._env_flag("USE_FINETUNE_WRAPPER", default=True)
+        if not enabled:
+            return None
+
+        adapter_path = os.getenv("FINETUNE_ADAPTER_PATH")
+        if not adapter_path:
+            return None
+
+        adapter_path = adapter_path.strip()
+        if not adapter_path:
+            return None
+
+        if not os.path.exists(adapter_path):
+            raise FileNotFoundError(
+                f"FINETUNE_ADAPTER_PATH does not exist: {adapter_path}"
+            )
+
+        return adapter_path
+
     def get_model_and_tokenizer(
         self, model_id: str = None
     ) -> Tuple[AutoModelForCausalLM, AutoTokenizer]:
@@ -59,9 +82,12 @@ class ModelManager:
         if model_id is None:
             model_id = self.default_model_id
 
+        adapter_path = self._get_finetune_adapter_path()
+        cache_key = f"{model_id}::adapter={adapter_path or 'none'}"
+
         # Return cached if available
-        if model_id in self.loaded_models:
-            return self.loaded_models[model_id]
+        if cache_key in self.loaded_models:
+            return self.loaded_models[cache_key]
 
         # Load new model
         print(f"[Model] Loading: {model_id}")
@@ -106,6 +132,17 @@ class ModelManager:
                 trust_remote_code=True,
             )
 
+        if adapter_path:
+            try:
+                peft_module = importlib.import_module("peft")
+                PeftModel = getattr(peft_module, "PeftModel")
+                model = PeftModel.from_pretrained(model, adapter_path)
+                print(f"[Model] Applied finetune wrapper: {adapter_path}")
+            except ModuleNotFoundError as e:
+                raise RuntimeError(
+                    "peft is required when FINETUNE_ADAPTER_PATH is set"
+                ) from e
+
         model_device = next(model.parameters()).device
         print(f"[Model] Loaded successfully on {model_device}")
         if hasattr(model, "hf_device_map") and any(v == "cpu" for v in model.hf_device_map.values()):
@@ -115,7 +152,7 @@ class ModelManager:
         )
 
         # Cache it
-        self.loaded_models[model_id] = (model, tokenizer)
+        self.loaded_models[cache_key] = (model, tokenizer)
 
         return model, tokenizer
 
@@ -171,6 +208,22 @@ def get_loaded_models():
 def get_memory_usage():
     """Get current GPU memory usage."""
     return _manager.get_memory_usage()
+
+
+def get_active_wrapper_info():
+    """Expose active wrapper settings for diagnostics and benchmark reporting."""
+    try:
+        adapter_path = _manager._get_finetune_adapter_path()
+        return {
+            "finetune_wrapper_enabled": bool(adapter_path),
+            "adapter_path": adapter_path,
+        }
+    except Exception as e:
+        return {
+            "finetune_wrapper_enabled": False,
+            "adapter_path": None,
+            "wrapper_error": str(e),
+        }
 
 
 def preload_models(model_ids: list[str] | None = None):
