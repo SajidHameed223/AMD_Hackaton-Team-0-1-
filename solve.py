@@ -116,7 +116,6 @@ def _try_cloud_infer(prompt: str, client, plan, force_strong: bool = False) -> s
                 system_prompt=spec.system_prompt,
                 user_prompt=prompt,
                 max_tokens=spec.max_tokens,
-                reasoning_effort=spec.reasoning_effort,
             )
         )
         print(f" cloud_model={model} tok={tok}", end="")
