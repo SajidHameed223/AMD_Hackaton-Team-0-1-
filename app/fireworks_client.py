@@ -26,21 +26,25 @@ class FireworksClient:
         system_prompt: str,
         user_prompt: str,
         max_tokens: int,
+        reasoning_effort: str = "none",
     ) -> tuple[str, int]:
         """Returns (answer_text, total_tokens_used)."""
         last_err: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
+                kwargs = dict(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=0.2,  # low temp: grading wants correctness, not creativity
+                )
+                if reasoning_effort and reasoning_effort != "none":
+                    kwargs["extra_body"] = {"reasoning_effort": reasoning_effort}
                 completion = await asyncio.wait_for(
-                    self._client.chat.completions.create(
-                        model=model,
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_prompt},
-                        ],
-                        max_tokens=max_tokens,
-                        temperature=0.2,  # low temp: grading wants correctness, not creativity
-                    ),
+                    self._client.chat.completions.create(**kwargs),
                     timeout=self.per_task_timeout_s,
                 )
                 text = completion.choices[0].message.content or ""
