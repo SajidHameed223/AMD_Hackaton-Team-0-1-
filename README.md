@@ -2,6 +2,21 @@
 
 **AMD Developer Hackathon ACT II, Track 1**
 
+## Current Integrated Submission Path
+
+The active `/chat` path for the uploaded main branch uses the approved local Track 1 model stack:
+
+`frontend/` UI -> Next.js route/FastAPI `/chat` -> `app.track1_router.answer_chat()` -> `gemma3:1b-it-qat` local model endpoint when a model call is needed.
+
+Important details:
+
+- Default local model: `gemma3:1b-it-qat`.
+- Runtime model endpoint: `LOCAL_MODEL_API_URL` or `OLLAMA_URL`, expected to be Ollama-compatible `/api/chat`.
+- Known Track 1 weak spots are handled deterministically before any model call.
+- `app/router.py` also delegates to these deterministic Track 1 fixes first, so the original router path is on par for the approved local-model cases.
+- The old VLLM files are retained as reference code, but the active UI/backend `/chat` path does not use their VLLM router.
+
+
 Routes each task to the cheapest correct path to minimize Fireworks tokens while clearing the accuracy gate across 8 categories.
 
 ## Architecture

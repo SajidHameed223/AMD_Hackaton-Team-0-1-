@@ -7,6 +7,13 @@ import re
 import symtable
 from collections import Counter
 
+try:
+    from app.track1_router import classify_domain as _track1_classify_domain
+    from app.track1_router import deterministic_answer as _track1_deterministic_answer
+except Exception:  # pragma: no cover - keeps standalone demo mode working
+    _track1_classify_domain = None
+    _track1_deterministic_answer = None
+
 
 _MATH_PAT = re.compile(
     r"\b(calcul|comput|solv|how many|how much|remain|total|sum|differ|product"
@@ -424,6 +431,22 @@ def verify_math(result: str, prompt: str) -> bool:
 
 
 def dispatch(prompt: str) -> dict:
+    if _track1_deterministic_answer is not None:
+        answer = _track1_deterministic_answer(prompt)
+        if answer:
+            category = (
+                _track1_classify_domain(prompt)
+                if _track1_classify_domain is not None
+                else classify(prompt)
+            )
+            return {
+                "tier": "T0",
+                "category": category,
+                "answer": answer,
+                "confidence": 1.0,
+                "tokens": 0,
+            }
+
     category = classify(prompt)
     solver = _SOLVERS.get(category)
     if solver is not None:

@@ -1,95 +1,138 @@
-import os
+from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.rate_limit import SlidingWindowRateLimiter
-from app.router import route_model
-from app.schemas import ChatRequest, ChatResponse
-from app.usage_logger import log_usage
-from app.vllm_client import VLLMClient
-
-
-app = FastAPI(title="AMD Hackathon Team 0-1 API", version="0.1.0")
-
-
-RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "10"))
-rate_limiter = SlidingWindowRateLimiter(max_requests=RATE_LIMIT_PER_HOUR, window_seconds=3600)
-vllm_client = VLLMClient()
+from app.chat_history import router as chat_history_router
+from app.config import get_cors_origins
+from app.database import database_status
+from app.schemas import ErrorResponse, HealthResponse
+from app.ui_api import router as ui_router
 
 
-@app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+API_VERSION = "v1"
 
-
-@app.get("/")
-def root() -> dict[str, str]:
-    return {"message": "API is running"}
-
-
-@app.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest, request: Request, x_user_id: str | None = Header(default=None)):
-    user_id = x_user_id or (request.client.host if request.client else "unknown")
-    allowed, retry_after = rate_limiter.check(user_id)
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Retry in {retry_after} seconds.",
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    routed_size, route_reason = route_model(req.message, req.task_type)
-
-    try:
-        result = vllm_client.chat(
-            model_size=routed_size,
-            message=req.message,
-            max_tokens=req.max_tokens,
-            temperature=req.temperature,
-        )
-    except RuntimeError as error:
-        log_usage(
-            {
-                "event": "chat_error",
-                "user_id": user_id,
-                "task_type": req.task_type,
-                "routed_size": routed_size,
-                "route_reason": route_reason,
-                "error": str(error),
-            }
-        )
-        raise HTTPException(status_code=502, detail=str(error)) from error
-
-    usage = result.get("usage", {})
-    log_usage(
+app = FastAPI(
+    title="AMD Hackathon Team 0-1 API",
+    summary="Frontend integration API for O(1) chat, history, and usage views.",
+    description=(
+        "The frontend consumes these endpoints directly. Use `/docs` for the "
+        "interactive OpenAPI UI and `/openapi.json` for generated clients."
+    ),
+    version="0.1.0",
+    openapi_tags=[
         {
-            "event": "chat",
-            "user_id": user_id,
-            "task_type": req.task_type,
-            "routed_model": result["model"],
-            "route_reason": route_reason,
-            "latency_ms": result["latency_ms"],
-            "usage": usage,
-            "chars": len(req.message),
-        }
+            "name": "health",
+            "description": "Runtime and dependency status used by the top-bar badge.",
+        },
+        {
+            "name": "chat",
+            "description": "Auto-routed chat reply contract used by the composer.",
+        },
+        {
+            "name": "chat history",
+            "description": "PostgreSQL-backed chat history rail endpoints.",
+        },
+        {
+            "name": "usage",
+            "description": "Dashboard metrics derived from saved chat history.",
+        },
+    ],
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-API-Version"],
+)
+app.include_router(ui_router)
+app.include_router(chat_history_router)
+app.include_router(ui_router, prefix="/api/v1")
+app.include_router(chat_history_router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def add_integration_headers(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or str(uuid4())
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-API-Version"] = API_VERSION
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    request_id = getattr(request.state, "request_id", None)
+    message = str(exc.detail)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "error": {
+                "code": f"http_{exc.status_code}",
+                "message": message,
+                "requestId": request_id,
+            },
+        },
+        headers={"X-Request-ID": request_id or "", "X-API-Version": API_VERSION},
     )
 
-    return ChatResponse(
-        answer=result["answer"],
-        routed_model=result["model"],
-        route_reason=route_reason,
-        latency_ms=result["latency_ms"],
-        provider="vllm",
-        usage=usage,
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    request_id = getattr(request.state, "request_id", None)
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": exc.errors(),
+            "error": {
+                "code": "validation_error",
+                "message": "Request validation failed",
+                "requestId": request_id,
+            },
+        },
+        headers={"X-Request-ID": request_id or "", "X-API-Version": API_VERSION},
     )
 
 
-@app.get("/router/decision")
-def router_decision(message: str, task_type: str = "default") -> dict[str, str]:
-    model_size, reason = route_model(message, task_type)
-    return {"routed_size": model_size, "reason": reason}
+@app.get(
+    "/health",
+    response_model=HealthResponse,
+    tags=["health"],
+    summary="Check API and database status",
+    description="Returns `database: ok`, `unavailable`, or `not_configured`.",
+    responses={503: {"model": ErrorResponse}},
+)
+def health(request: Request) -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        database=database_status(),
+        apiVersion=API_VERSION,
+        requestId=getattr(request.state, "request_id", None),
+    )
 
 
-@app.get("/limits")
-def limits() -> dict[str, int]:
-    return {"rate_limit_per_hour": RATE_LIMIT_PER_HOUR}
+@app.get(
+    "/api/v1/health",
+    response_model=HealthResponse,
+    tags=["health"],
+    summary="Check API and database status",
+    description="Versioned alias for `GET /health`.",
+)
+def versioned_health(request: Request) -> HealthResponse:
+    return health(request)
+
+
+@app.get("/", tags=["health"], summary="API root")
+def root() -> dict[str, str]:
+    return {"message": "API is running", "apiVersion": API_VERSION}
+
+
+@app.get("/api/v1", tags=["health"], summary="Versioned API root")
+def versioned_root() -> dict[str, str]:
+    return root()
