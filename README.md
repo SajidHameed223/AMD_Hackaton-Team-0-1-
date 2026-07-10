@@ -1,164 +1,159 @@
-# Fireworks Remote Worker (Track 1)
+# Fireworks Cloud LLM Module
 
-This is **not** the hackathon submission by itself. It's the remote
-(Fireworks) worker that your team's main orchestrator imports and
-calls directly. It does **not** read environment variables and does
-**not** have a `config.py` — everything is passed in explicitly by
-whoever constructs it.
+This module handles all Fireworks API calls for Track 1. It classifies each
+incoming task by category, picks a system prompt + token budget + reasoning
+setting tuned for that category, routes to the cheap or strong model, and
+returns `{"task_id", "answer"}`.
 
-## Why no config.py / no env reading in this module
+**Local models and routing logic are owned by the router team and live
+outside this module.** This module is only responsible for the "call
+Fireworks" leg of the pipeline — the router decides *whether* to call it.
 
-Per the guide, the harness injects `FIREWORKS_API_KEY`,
-`FIREWORKS_BASE_URL`, and `ALLOWED_MODELS` into **the container's**
-environment — i.e. into the main server's process, since that's the
-thing the harness actually runs (`ENTRYPOINT` reads `/input/tasks.json`,
-writes `/output/results.json`). The main server is the one that should
-do:
+## Files
 
-```python
-api_key = os.environ["FIREWORKS_API_KEY"]
-base_url = os.environ["FIREWORKS_BASE_URL"]
-models = os.environ["ALLOWED_MODELS"].split(",")
-```
+| File | Responsibility |
+|---|---|
+| `config.py` | Reads `FIREWORKS_API_KEY`, `FIREWORKS_BASE_URL`, `ALLOWED_MODELS`, and local dev knobs from environment variables. |
+| `categorize.py` | Regex-classifies a prompt into one of 8 categories, returns a `CategorySpec` (system prompt, max_tokens, reasoning_effort, which model tier to use). |
+| `model_select.py` | Given `ALLOWED_MODELS`, decides which model is "cheap" and which is "strong". |
+| `fireworks_client.py` | Thin async wrapper around the OpenAI-compatible Fireworks endpoint. Handles retries, timeouts, and `reasoning_effort`. |
+| `fire_worker.py` | **The integration point.** `FireworksWorker` class — instantiate once, call `handle_task(task)` per task. |
 
-This module just receives those as constructor arguments. That keeps
-it: testable without touching the environment, reusable if the main
-server sources config differently, and with a single, obvious place
-(the main server) that owns "where do these values come from."
+`main.py` is a standalone CLI runner (reads `/input/tasks.json`, writes
+`/output/results.json` directly) for solo testing without a router. **It is
+not part of the router integration path** — if the router calls
+`FireworksWorker` directly, `main.py` can be deleted from the image.
 
-## The real architecture
+## Integration guide (for the router team)
 
-```
-main server (owns the Docker ENTRYPOINT)
-  ├── reads FIREWORKS_API_KEY / FIREWORKS_BASE_URL / ALLOWED_MODELS from env
-  ├── reads /input/tasks.json
-  ├── constructs FireworksWorker(api_key, base_url, allowed_models) ONCE
-  ├── constructs local-LLM worker ONCE
-  ├── loop: for each task, router decides local vs. remote
-  ├── fires ALL tasks concurrently (doesn't wait for one before
-  │   sending the next) — remote queue and local queue run in parallel
-  ├── local worker  -> handle_task(task) -> {"task_id", "answer"}
-  ├── remote worker -> handle_task(task) -> {"task_id", "answer"}   <- this module
-  └── collects everything, writes /output/results.json before exiting
-```
-
-## What this module provides
-
-`app/fireworks_worker.py` exposes `FireworksWorker`:
+### 1. Instantiate once, reuse for every task
 
 ```python
-import os
-from app.fireworks_worker import FireworksWorker
+from app.fire_worker import FireworksWorker
+from app.config import get_settings
+
+settings = get_settings()
 
 worker = FireworksWorker(
-    api_key=os.environ["FIREWORKS_API_KEY"],
-    base_url=os.environ["FIREWORKS_BASE_URL"],
-    allowed_models=os.environ["ALLOWED_MODELS"].split(","),
-    max_concurrency=5,       # optional, defaults shown
-    max_retries=2,           # optional
-    per_task_timeout_s=60.0, # optional
+    api_key=settings.api_key,
+    base_url=settings.base_url,
+    allowed_models=settings.allowed_models,
+    max_concurrency=5,       # tune based on how much of your 4GB/2vCPU budget is left after local models
+    max_retries=2,
+    per_task_timeout_s=60.0,
 )
+```
 
+Create **one `FireworksWorker` per container process**, at startup — not
+per task. It holds the HTTP connection pool and the shared concurrency
+semaphore. Creating a new one per task defeats both.
+
+### 2. Route a task to it
+
+```python
 result = await worker.handle_task({"task_id": "t1", "prompt": "..."})
 # -> {"task_id": "t1", "answer": "..."}
+```
 
-# at shutdown:
+`handle_task` **never raises** — any internal failure (timeout, API error,
+malformed response) is caught and returned as a normal result dict with an
+`[error generating answer: ...]` answer string, so a single failing task
+never crashes `asyncio.gather()` over the full batch. Router-side, you can
+`await asyncio.gather(*[worker.handle_task(t) for t in tasks])` directly
+without wrapping each call in its own try/except.
+
+### 3. When to hand a task to this module vs. keep it local
+
+This module has no opinion on that decision — that's the router's call. What
+it does internally is decide, **once a task is already routed here**, which
+Fireworks model tier to use for it (see `categorize.py`). If your router
+logic wants to send some tasks straight to a specific tier regardless of
+category, bypass `handle_task()` and call `worker.client.complete(...)`
+directly with your own `model` / `system_prompt` / `max_tokens`.
+
+### 4. Reading token usage
+
+```python
+worker.total_tokens_used   # running total across every call this worker has made
+```
+
+This is **not** included in the returned dict from `handle_task` (the
+return value stays a strict `{"task_id", "answer"}` pair to match the
+submission schema). Read it separately if you want to log/report it — e.g.
+for a shared token-efficiency dashboard across local + Fireworks usage.
+
+Only tokens spent through this module count toward the Track 1 token score
+— confirm `FIREWORKS_BASE_URL` is the one actually being hit (it's read from
+env, never hardcoded, so this should hold automatically).
+
+### 5. Shutdown
+
+```python
 await worker.close()
 ```
 
-Call `handle_task()` concurrently for every task the router sends to
-the cloud queue — e.g. `asyncio.gather(*(worker.handle_task(t) for t
-in remote_tasks))`. Safe to fire many at once: a single shared
-Fireworks client + semaphore (`max_concurrency`) keeps concurrent
-Fireworks calls bounded regardless of how many tasks land on it
-simultaneously — verified locally (see Testing below) that with
-`max_concurrency=3`, exactly 3 calls are ever in flight no matter how
-many tasks are fired at once. `handle_task` never raises — a failed
-task comes back as a normal `{"task_id", "answer"}` dict with an error
-message in `answer`, so it can't break the router's `gather()`.
+Call this once, when the container is shutting down, to close the
+underlying HTTP client cleanly. Not calling it won't crash anything before
+exit, but skipping it risks leaving connections open if the process lingers.
 
-## How the pieces fit together
+## Environment variables this module reads
 
-- **`model_select.py`** — `plan_models(allowed_models: list[str])`
-  splits the list into a cheap pick (easy categories) and a strong
-  pick (hard categories) via name heuristics, since exact model IDs
-  aren't known until launch day and must never be hardcoded.
-- **`categorize.py`** — classifies each prompt into one of the 8
-  graded categories and returns the system prompt + `max_tokens`
-  ceiling for it. Pure regex/keyword based — no extra LLM call, so
-  classification itself costs zero tokens.
-- **`fireworks_client.py`** — pooled async OpenAI-compatible client.
-  Takes `api_key`/`base_url` as constructor args, never reads env
-  itself. Retries only on 5xx/network errors, per-call timeout so one
-  hang can't block the whole batch.
-- **`fireworks_worker.py`** — the public interface described above.
-  This is the only file the main server needs to import.
-- **`local_test_cli.py`** — standalone test harness only. This is the
-  one file in this package that *does* read env vars directly — it's
-  standing in for what the main server will do, purely so this module
-  can be smoke-tested end to end in isolation. **The real submission's
-  entrypoint is the main server's own code, not this file.**
+| Variable | Required | Notes |
+|---|---|---|
+| `FIREWORKS_API_KEY` | Yes | Injected by harness at eval time. |
+| `FIREWORKS_BASE_URL` | Yes | All calls route through this — never hardcode a different endpoint. |
+| `ALLOWED_MODELS` | Yes | Comma-separated. Calling anything outside this list = `MODEL_VIOLATION`. |
+| `MAX_CONCURRENCY` | No (default 5) | In-flight Fireworks calls at once. Lower if local models are eating most of the 4GB/2vCPU budget. |
+| `PER_TASK_TIMEOUT_S` | No (default 60) | Per-call timeout before retry/failure. |
+| `MAX_RETRIES` | No (default 2) | Retries on 5xx/timeout; 4xx errors are not retried (except one automatic retry without `reasoning_effort`, see below). |
 
-## Local testing (isolated, without the router)
+## Design notes worth knowing before you touch this
+
+- **`reasoning_effort` is category-tuned, not a fixed value.** Factual,
+  sentiment, NER, and summarization use `"none"` — testing showed the
+  reasoning-tuned model (Kimi K2 family) was leaking its internal
+  deliberation straight into the visible answer content when reasoning was
+  left at model default, sometimes truncating before ever reaching an
+  actual answer. Math/logic/code use `"low"` — some real reasoning helps
+  there, capped rather than open-ended. If Fireworks changes what
+  reasoning-capable models are in `ALLOWED_MODELS` on launch day, re-test
+  this — the leak may not affect every model the same way.
+- **`fireworks_client.py` auto-falls-back if `reasoning_effort` 400s.** If
+  the resolved model doesn't accept the param, the client retries once with
+  it stripped rather than failing the task outright.
+- **`model_select.py` special-cases Kimi vs. MiniMax by name** rather than
+  relying purely on generic substring hints — generic hints alone
+  misclassify `"minimax"` (it contains both `"mini"`-like and `"max"`-like
+  substrings), which produced meaningless cheap/strong assignments. If
+  `ALLOWED_MODELS` includes model families outside these two on launch day,
+  check the fallback heuristic actually picks sensibly for them.
+- **Token budgets per category (`max_tokens` in `categorize.py`) were
+  tuned down** after confirming the reasoning leak was fixed — don't bump
+  these back up without checking whether truncation is actually happening;
+  a bigger cap only helps if the model is running out of room for a
+  genuine answer, not as an insurance blanket.
+
+## Testing locally
 
 ```bash
-pip install -r requirements.txt
-pip install fastapi uvicorn   # only for the local mock server
+export FIREWORKS_API_KEY="..."
+export FIREWORKS_BASE_URL="..."
+export ALLOWED_MODELS="..."
 
-# terminal 1
-uvicorn test_mock_server:app --port 9000
-
-# terminal 2 — exactly the env var shape the harness will use
-FIREWORKS_API_KEY=mock-key \
-FIREWORKS_BASE_URL=http://127.0.0.1:9000/v1 \
-ALLOWED_MODELS="accounts/fireworks/models/kimi-k2p6,accounts/fireworks/models/minimax-m2p7" \
-TASKS_INPUT_PATH=test_input/tasks.json \
-RESULTS_OUTPUT_PATH=test_output/results.json \
-python -m app.local_test_cli
-
-cat test_output/results.json
-```
-
-## Testing the direct import pattern (what the real main server will do)
-
-```python
-import asyncio, json
-from app.fireworks_worker import FireworksWorker
+python3 -c "
+import asyncio
+from app.fire_worker import FireworksWorker
 
 async def main():
-    worker = FireworksWorker(
-        api_key="mock-key",
-        base_url="http://127.0.0.1:9000/v1",
-        allowed_models=["accounts/fireworks/models/kimi-k2p6"],
-    )
-    tasks = json.load(open("test_input/tasks.json"))
-    results = await asyncio.gather(*(worker.handle_task(t) for t in tasks))
-    await worker.close()
-    print(results)
+    w = FireworksWorker(api_key='...', base_url='...', allowed_models=[...])
+    r = await w.handle_task({'task_id': 't1', 'prompt': 'What is the capital of Australia?'})
+    print(r)
+    print('tokens used:', w.total_tokens_used)
+    await w.close()
 
 asyncio.run(main())
+"
 ```
 
-## Handing off to whoever builds the main server
-
-They need to:
-1. Copy this `app/` package into the main server's project (or install
-   it as a local package).
-2. In their own `main.py` (the real Docker `ENTRYPOINT`), read
-   `FIREWORKS_API_KEY`, `FIREWORKS_BASE_URL`, `ALLOWED_MODELS` from
-   `os.environ` — do not hardcode, do not bundle a `.env` in the image.
-3. Construct `FireworksWorker(api_key=..., base_url=..., allowed_models=...)`
-   **once** at startup, alongside their local-LLM worker.
-4. Read `/input/tasks.json`, run the router, and for every task routed
-   to the cloud queue call `await worker.handle_task(task)` — fire
-   many concurrently via `asyncio.gather` or a task queue, don't await
-   one before starting the next.
-5. Merge remote results with whatever the local-LLM worker returns, in
-   whatever order they complete, into `/output/results.json`.
-6. Call `await worker.close()` once at shutdown.
-7. Exit 0 on success.
-
-No HTTP layer needed unless the main server and this module end up in
-separate processes/containers later — in that case, wrap
-`handle_task` in a tiny FastAPI endpoint and have the router call it
-over HTTP instead. The internal logic doesn't change either way.
+Or use the practice task set from the Track 1 doc to sanity-check all 8
+categories at once before wiring into the router.
