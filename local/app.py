@@ -64,9 +64,23 @@ def warmup_models():
     This makes startup slower, but first user requests are much faster because
     the model is already initialized and cached in memory.
     """
+    preload_enabled = os.getenv("PRELOAD_MODELS_ON_STARTUP", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if not preload_enabled:
+        print("[Startup] Skipping preload (PRELOAD_MODELS_ON_STARTUP is disabled)")
+        return
+
     print("[Startup] Preloading models before serving the website...")
-    preload_models()
-    print(f"[Startup] Loaded models: {get_loaded_models()}")
+    try:
+        preload_models()
+        print(f"[Startup] Loaded models: {get_loaded_models()}")
+    except Exception as e:
+        # Keep the API up and rely on lazy loading during the first request.
+        print(f"[Startup] Preload failed, continuing with lazy load: {type(e).__name__}: {e}")
 
 
 class Request(BaseModel):
