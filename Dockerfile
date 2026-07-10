@@ -1,33 +1,22 @@
-# syntax=docker/dockerfile:1
-FROM --platform=linux/amd64 python:3.12-slim
+FROM python:3.12-slim
+
+ENV OLLAMA_HOST=127.0.0.1:11434
+ENV OLLAMA_MODELS=/root/.ollama/models
+ENV LOCAL_MODEL=gemma3:1b-it-qat
+ENV LD_LIBRARY_PATH=/usr/local/lib/ollama
+ENV OLLAMA_FLASH_ATTENTION=1
+ENV OLLAMA_KV_CACHE_TYPE=q4_0
+ENV KV_CACHE_QUANTIZATION=q4_0
 
 WORKDIR /app
 
-# ---------- dependencies ----------
-COPY requirements.txt .
+COPY ollama-runtime/ollama /usr/local/bin/ollama
+COPY ollama-runtime/lib/ /usr/local/lib/ollama/
+COPY models/ /root/.ollama/models/
+COPY agent.py /app/agent.py
+COPY entrypoint.sh /app/entrypoint.sh
+COPY tools.json /app/tools.json
 
-# Install CPU-only PyTorch first (saves ~1.5 GB vs CUDA variant),
-# then the remaining deps. --no-cache-dir keeps the layer small.
-RUN pip install --no-cache-dir \
-        torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir -r requirements.txt
+RUN chmod +x /usr/local/bin/ollama /usr/local/lib/ollama/llama-server /usr/local/lib/ollama/llama-quantize /app/entrypoint.sh
 
-# ---------- application code ----------
-COPY app/  app/
-COPY local/ local/
-COPY ml/ ml/
-COPY solve.py .
-
-# ---------- local model weights (optional) ----------
-# Pre-download weights with:  python download_model.py
-# If models/ is empty the image stays small (~1.5 GB) and T1 fails
-# gracefully at runtime, falling back to T2 (cloud).
-COPY models/ models/
-
-# Point local/model.py at the bundled weights (if present)
-ENV MODEL_NAME=/app/models/gemma-2b-it
-
-# ---------- runtime ----------
-# Grading harness injects FIREWORKS_API_KEY, FIREWORKS_BASE_URL,
-# and ALLOWED_MODELS at runtime — solve.py reads them from env.
-ENTRYPOINT ["python", "solve.py"]
+ENTRYPOINT ["/app/entrypoint.sh"]

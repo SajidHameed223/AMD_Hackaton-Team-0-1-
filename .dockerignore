@@ -22,3 +22,14 @@ dashboard.html
 .github/
 .vscode/
 AGENTS.md
+
+# Local-model Docker runtime and artifact exclusions
+input
+output
+*.tar
+*.tar.gz
+*.zip
+probe-input
+probe-output
+local.env
+*.env
