@@ -1,0 +1,53 @@
+{
+  "model": "gemma3:1b-it-qat",
+  "runtime_optimization": {
+    "name": "ollama-q4-kv-cache",
+    "note": "This is q4 KV-cache quantization exposed by Ollama/llama.cpp, not true Google TurboQuant. True TurboQuant requires backend-level KV-cache kernels with rotation, scalar Lloyd-Max/PolarQuant quantization, and QJL residual correction; that is not exposed by the bundled stripped Ollama runtime.",
+    "env": {
+      "OLLAMA_FLASH_ATTENTION": "1",
+      "OLLAMA_KV_CACHE_TYPE": "q4_0",
+      "KV_CACHE_QUANTIZATION": "q4_0"
+    }
+  },
+  "tools": [
+    {
+      "name": "calculator",
+      "type": "deterministic_local",
+      "schema": {
+        "tool": "calculator",
+        "expression": "numeric expression"
+      },
+      "use_when": "Exact arithmetic, percentages, totals, averages, rates, differences, comparisons, and multi-step numeric word problems."
+    },
+    {
+      "name": "search",
+      "type": "network_optional",
+      "schema": {
+        "tool": "search",
+        "query": "search query"
+      },
+      "use_when": "Latest/current/official facts, prices, schedules, versions, news, documentation, or prompts that explicitly ask to search or verify online.",
+      "disable_with": "ENABLE_WEB_SEARCH=0"
+    },
+    {
+      "name": "fireworks_chat",
+      "type": "cloud_fallback",
+      "use_when": "Rubric marks a prompt high risk for local Gemma, such as strict summary, rich NER, hard logic, or unseen code/debugging.",
+      "env": [
+        "FIREWORKS_API_KEY",
+        "FIREWORKS_BASE_URL",
+        "ALLOWED_MODELS"
+      ]
+    }
+  ],
+  "routing": {
+    "strategy": "local-rubric-router-with-fireworks-fallback",
+    "rubric": "dist/ROUTING_RUBRIC.md",
+    "fireworks_env": [
+      "FIREWORKS_API_KEY",
+      "FIREWORKS_BASE_URL",
+      "ALLOWED_MODELS"
+    ],
+    "note": "Fireworks is used only for rubric-high-risk prompts; local model/tool paths remain the default."
+  }
+}
