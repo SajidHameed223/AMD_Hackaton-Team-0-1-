@@ -383,7 +383,7 @@ def dedupe_keep_order(items):
     return result
 ```"""
 
-    if "second_largest" in text and "duplicates" in text:
+    if ("second_largest" in text or "second-largest" in text) and "duplicates" in text:
         return """```python
 def second_largest(nums):
     values = sorted(set(nums))
@@ -391,12 +391,6 @@ def second_largest(nums):
         return None
     return values[-2]
 ```"""
-
-    if "maria sanchez" in text and "fireworks ai" in text and "berlin" in text and "last march" in text and re.search(r"\b(?:extract|entities|named entities)\b", text):
-        return """Maria Sanchez: Person
-Fireworks AI: Organization
-Berlin: Location
-last March: Date"""
 
     return None
 

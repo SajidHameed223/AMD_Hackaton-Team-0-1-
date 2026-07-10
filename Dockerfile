@@ -3,21 +3,29 @@ FROM python:3.12-slim
 ENV OLLAMA_HOST=127.0.0.1:11434
 ENV OLLAMA_MODELS=/root/.ollama/models
 ENV LOCAL_MODEL=gemma3:1b-it-qat
-ENV LD_LIBRARY_PATH=/usr/local/lib/ollama
+ENV OLLAMA_NUM_PARALLEL=1
+ENV OLLAMA_MAX_LOADED_MODELS=1
 ENV OLLAMA_FLASH_ATTENTION=1
-ENV OLLAMA_KV_CACHE_TYPE=q4_0
-ENV KV_CACHE_QUANTIZATION=q4_0
 
 WORKDIR /app
 
-COPY ollama-runtime/ollama /usr/local/bin/ollama
-COPY ollama-runtime/lib/ /usr/local/lib/ollama/
-COPY models/ /root/.ollama/models/
+# Install Ollama at build time (pulls the binary, not the model)
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates zstd && \
+    curl -fsSL https://ollama.com/install.sh | sh && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Pull the model at build time (cached in the image layer)
+RUN ollama serve & \
+    sleep 3 && \
+    ollama pull gemma3:1b-it-qat && \
+    kill %1 2>/dev/null || true
+
+# Copy agent code
 COPY agent.py /app/agent.py
 COPY local_engine/ /app/local_engine/
 COPY entrypoint.sh /app/entrypoint.sh
 COPY tools.json /app/tools.json
 
-RUN chmod +x /usr/local/bin/ollama /usr/local/lib/ollama/llama-server /usr/local/lib/ollama/llama-quantize /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]
