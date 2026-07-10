@@ -9,6 +9,8 @@ import urllib.parse
 import urllib.request
 
 
+from local_engine import LocalResult, solve_local as run_local_engine
+
 MODEL = os.environ.get("LOCAL_MODEL", "gemma3:1b-it-qat")
 LLM_BACKEND = os.environ.get("LLM_BACKEND", "ollama").lower()
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
@@ -17,8 +19,11 @@ INPUT_PATH = "/input/tasks.json"
 OUTPUT_PATH = "/output/results.json"
 ROUTE_LOG_PATH = os.environ.get("ROUTE_LOG_PATH", "/output/routes.jsonl")
 ENABLE_ROUTE_LOG = os.environ.get("ENABLE_ROUTE_LOG", "1") != "0"
-ENABLE_WEB_SEARCH = os.environ.get("ENABLE_WEB_SEARCH", "1") != "0"
+ENABLE_WEB_SEARCH = os.environ.get("ENABLE_WEB_SEARCH", "0") != "0"
 ENABLE_FIREWORKS = os.environ.get("ENABLE_FIREWORKS", "1") != "0"
+LOCAL_MAX_PASSES = max(1, min(3, int(os.environ.get("LOCAL_MAX_PASSES", "3"))))
+LOCAL_NUM_CTX = max(1024, min(4096, int(os.environ.get("LOCAL_NUM_CTX", "2048"))))
+LOCAL_NUM_THREADS = max(1, min(8, int(os.environ.get("LOCAL_NUM_THREADS", "2"))))
 FIREWORKS_API_KEY = os.environ.get("FIREWORKS_API_KEY", "").strip()
 FIREWORKS_BASE_URL = os.environ.get("FIREWORKS_BASE_URL", "").strip().rstrip("/")
 FIREWORKS_MODEL = os.environ.get("FIREWORKS_MODEL", "").strip()
@@ -430,7 +435,8 @@ def call_local_model(prompt: str, system_prompt: str = SYSTEM_PROMPT, num_predic
             "options": {
                 "temperature": 0.1,
                 "top_p": 0.9,
-                "num_ctx": 4096,
+                "num_ctx": LOCAL_NUM_CTX,
+                "num_thread": LOCAL_NUM_THREADS,
                 "num_predict": num_predict,
             },
         }
@@ -752,6 +758,9 @@ def log_route(task_id: str, decision: dict, *, used_cloud: bool = False, fallbac
         "reason": decision.get("reason", ""),
         "used_cloud": bool(used_cloud),
     }
+    for key in ("confidence", "passes", "tools", "violations", "status", "latency_ms"):
+        if key in decision:
+            entry[key] = decision[key]
     if fallback:
         entry["fallback"] = fallback
     try:
@@ -788,34 +797,38 @@ def answer_with_tools(prompt: str) -> str:
     return call_local_model(final_prompt, build_system_prompt(prompt, "final_tool"), num_predict=256)
 
 
+def solve_local(prompt: str) -> LocalResult:
+    """Run the independently verifiable local engine for router integrations."""
+
+    return run_local_engine(
+        prompt,
+        lambda user_prompt, system_prompt, num_predict: call_local_model(
+            user_prompt,
+            system_prompt,
+            num_predict,
+        ),
+        max_passes=LOCAL_MAX_PASSES,
+    )
+
+
 def answer_task(prompt: str, task_id: str = "") -> str:
-    direct = deterministic_answer(prompt)
-    if direct:
-        log_route(task_id, {
-            "domain": classify_domain(prompt),
-            "difficulty": "easy",
-            "route": "deterministic",
-            "reason": "matched deterministic rule",
-        })
-        return direct
-
-    decision = route_prompt(prompt)
-    if decision["route"] == "cloud":
-        try:
-            answer = call_fireworks(prompt)
-            log_route(task_id, decision, used_cloud=True)
-            return answer
-        except Exception as exc:
-            print(f"cloud fallback failed: {exc}", file=sys.stderr)
-            log_route(task_id, decision, fallback="local_after_cloud_failure")
-
-    if decision["route"] == "local_tool" and needs_current_fact(prompt) and ENABLE_WEB_SEARCH:
-        log_route(task_id, decision)
-        return answer_with_search(prompt)
-
-    if decision["route"] != "cloud":
-        log_route(task_id, decision)
-    return answer_with_tools(prompt)
+    result = solve_local(prompt)
+    log_route(
+        task_id,
+        {
+            "domain": result.domain,
+            "difficulty": "hard" if result.passes > 1 else "easy",
+            "route": "local_tool" if result.tools else "local",
+            "reason": f"local engine: {result.status}",
+            "confidence": result.confidence,
+            "passes": result.passes,
+            "tools": list(result.tools),
+            "violations": list(result.violations),
+            "status": result.status,
+            "latency_ms": result.latency_ms,
+        },
+    )
+    return result.answer
 
 
 def main() -> int:

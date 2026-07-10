@@ -62,3 +62,7 @@ and writes:
 ```text
 output/results.json
 ```
+
+## Adaptive Local Engine
+
+See `LOCAL_ENGINE_REPORT.md` for the certified local interface, tool design, and reproducible benchmark commands. The local engine is offline by default and leaves team routing/frontend code untouched.

@@ -1,53 +1,64 @@
 {
   "model": "gemma3:1b-it-qat",
-  "runtime_optimization": {
-    "name": "ollama-q4-kv-cache",
-    "note": "This is q4 KV-cache quantization exposed by Ollama/llama.cpp, not true Google TurboQuant. True TurboQuant requires backend-level KV-cache kernels with rotation, scalar Lloyd-Max/PolarQuant quantization, and QJL residual correction; that is not exposed by the bundled stripped Ollama runtime.",
-    "env": {
-      "OLLAMA_FLASH_ATTENTION": "1",
-      "OLLAMA_KV_CACHE_TYPE": "q4_0",
-      "KV_CACHE_QUANTIZATION": "q4_0"
-    }
+  "mode": "local-only-adaptive",
+  "public_interface": {
+    "compatibility": "agent.answer_task(prompt, task_id) -> str",
+    "certified": "agent.solve_local(prompt) -> LocalResult",
+    "statuses": [
+      "verified",
+      "best_effort",
+      "external_required",
+      "failed"
+    ]
   },
   "tools": [
     {
       "name": "calculator",
-      "type": "deterministic_local",
-      "schema": {
-        "tool": "calculator",
-        "expression": "numeric expression"
-      },
-      "use_when": "Exact arithmetic, percentages, totals, averages, rates, differences, comparisons, and multi-step numeric word problems."
+      "type": "deterministic",
+      "purpose": "Safe exact arithmetic, percentages, totals, rates, and multi-step word problems."
     },
     {
-      "name": "search",
-      "type": "network_optional",
-      "schema": {
-        "tool": "search",
-        "query": "search query"
-      },
-      "use_when": "Latest/current/official facts, prices, schedules, versions, news, documentation, or prompts that explicitly ask to search or verify online.",
-      "disable_with": "ENABLE_WEB_SEARCH=0"
+      "name": "constraint_solver",
+      "type": "deterministic",
+      "purpose": "Compile and exhaustively verify small assignment and ordering puzzles."
     },
     {
-      "name": "fireworks_chat",
-      "type": "cloud_fallback",
-      "use_when": "Rubric marks a prompt high risk for local Gemma, such as strict summary, rich NER, hard logic, or unseen code/debugging.",
-      "env": [
-        "FIREWORKS_API_KEY",
-        "FIREWORKS_BASE_URL",
-        "ALLOWED_MODELS"
-      ]
+      "name": "contract_guard",
+      "type": "deterministic",
+      "purpose": "Enforce sentence, word, bullet, JSON, answer-only, NER coverage, and code contracts."
+    },
+    {
+      "name": "code_lab",
+      "type": "restricted_subprocess",
+      "purpose": "Isolate requested Python functions and run bounded semantic tests for recognized specifications."
+    },
+    {
+      "name": "evidence_ledger",
+      "type": "deterministic",
+      "purpose": "Ground mixed-sentiment labels in positive and negative cues from the prompt."
+    },
+    {
+      "name": "knowledge_capsule",
+      "type": "offline_retrieval",
+      "purpose": "Answer stable computing and science fundamentals without network access or model hallucination."
+    },
+    {
+      "name": "entity_auditor",
+      "type": "deterministic",
+      "purpose": "Inventory explicit names, organizations, locations, dates, URLs, and paths before NER output."
     }
   ],
-  "routing": {
-    "strategy": "local-rubric-router-with-fireworks-fallback",
-    "rubric": "dist/ROUTING_RUBRIC.md",
-    "fireworks_env": [
-      "FIREWORKS_API_KEY",
-      "FIREWORKS_BASE_URL",
-      "ALLOWED_MODELS"
-    ],
-    "note": "Fireworks is used only for rubric-high-risk prompts; local model/tool paths remain the default."
+  "adaptive_compute": {
+    "max_passes": 3,
+    "easy_tasks": "one model pass or one deterministic tool call",
+    "hard_tasks": "candidate generation, deterministic validation, then bounded repair",
+    "external_facts": "return external_required instead of hallucinating"
+  },
+  "runtime": {
+    "num_ctx": 2048,
+    "num_threads": 2,
+    "ollama_parallelism": 1,
+    "network_required": false,
+    "kv_cache": "q4_0"
   }
 }
