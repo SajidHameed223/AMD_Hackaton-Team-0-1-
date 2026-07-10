@@ -22,6 +22,7 @@ class CategorySpec:
     system_prompt: str
     max_tokens: int
     use_strong_model: bool
+    reasoning_effort: str = "none"
 
 
 _SPECS: dict[Category, CategorySpec] = {
@@ -33,6 +34,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=60,
         use_strong_model=False,
+        reasoning_effort="none",
     ),
     Category.NER: CategorySpec(
         Category.NER,
@@ -42,6 +44,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=150,
         use_strong_model=False,
+        reasoning_effort="none",
     ),
     Category.SUMMARIZATION: CategorySpec(
         Category.SUMMARIZATION,
@@ -51,6 +54,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=180,
         use_strong_model=False,
+        reasoning_effort="none",
     ),
     Category.FACTUAL: CategorySpec(
         Category.FACTUAL,
@@ -60,6 +64,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=200,
         use_strong_model=False,
+        reasoning_effort="none",
     ),
     Category.MATH: CategorySpec(
         Category.MATH,
@@ -69,6 +74,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=250,
         use_strong_model=True,
+        reasoning_effort="none",
     ),
     Category.LOGIC: CategorySpec(
         Category.LOGIC,
@@ -78,6 +84,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=250,
         use_strong_model=True,
+        reasoning_effort="none",
     ),
     Category.CODE_DEBUG: CategorySpec(
         Category.CODE_DEBUG,
@@ -87,6 +94,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=350,
         use_strong_model=True,
+        reasoning_effort="none",
     ),
     Category.CODE_GEN: CategorySpec(
         Category.CODE_GEN,
@@ -96,6 +104,7 @@ _SPECS: dict[Category, CategorySpec] = {
         ),
         max_tokens=350,
         use_strong_model=True,
+        reasoning_effort="none",
     ),
 }
 
