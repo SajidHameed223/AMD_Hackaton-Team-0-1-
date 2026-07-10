@@ -15,3 +15,10 @@ ml/*.pkl
 
 # Local model artifacts (too large for GitHub)
 models/
+
+# Runtime logs and dev artifacts (never commit)
+logs.jsonl
+request_log.jsonl
+*.jsonl
+test.html
+dashboard.html
