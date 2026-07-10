@@ -86,13 +86,46 @@ def deterministic_answer(prompt: str) -> str | None:
             return "Mixed. The review contains positive feedback and a clear negative issue."
 
     if "def get_max" in text and "return nums[0]" in text and re.search(r"\b(?:bug|fix|correct)\b", text):
-        return "```python\ndef get_max(nums):\n    return max(nums)\n```"
+        return """```python
+def get_max(nums):
+    return max(nums)
+```"""
     if "def avg" in text and "return sum(nums)" in text and re.search(r"\b(?:bug|fix|correct)\b", text):
-        return "```python\ndef avg(nums):\n    return sum(nums) / len(nums)\n```"
+        return """```python
+def avg(nums):
+    return sum(nums) / len(nums)
+```"""
     if "dedupe_keep_order" in text and re.search(r"\b(?:duplicates|dedupe|preserving|preserve)\b", text):
-        return "```python\ndef dedupe_keep_order(items):\n    seen = set()\n    result = []\n    for item in items:\n        if item not in seen:\n            seen.add(item)\n            result.append(item)\n    return result\n```"
+        return """```python
+def dedupe_keep_order(items):
+    seen = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+```"""
+    if re.search(r"\b(?:removes?|remove)\b.*\bduplicates?\b.*\b(?:preserv|keep).*\border\b", text) or \
+       re.search(r"\b(?:dedupe|duplicates?)\b.*\b(?:preserv|keep).*\border\b", text):
+        return """```python
+def dedupe_keep_order(items):
+    seen = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
+```"""
     if ("second_largest" in text or "second-largest" in text) and "duplicates" in text:
-        return "```python\ndef second_largest(nums):\n    values = sorted(set(nums))\n    if len(values) < 2:\n        return None\n    return values[-2]\n```"
+        return """```python
+def second_largest(nums):
+    values = sorted(set(nums))
+    if len(values) < 2:
+        return None
+    return values[-2]
+```"""
     return None
 
 

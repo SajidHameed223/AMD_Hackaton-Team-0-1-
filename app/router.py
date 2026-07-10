@@ -152,6 +152,7 @@ _NEG_WORDS = {
     "scratch", "scratches", "scratchy", "flimsy", "fragile", "unreliable",
     "laggy", "sluggish", "stutter", "freeze", "freezes", "freezing", "crash", "crashes",
     "drop", "drops", "leak", "leaks", "rattly", "loose", "slow",
+    "dies", "dead", "death", "dying", "drain", "drains", "drained",
 }
 
 
@@ -264,7 +265,11 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
     n = max(1, min(5, len(sentences) // 3))
     top = sorted(scored, key=lambda x: x[0], reverse=True)[:n]
     top.sort(key=lambda x: x[1])
-    return " ".join(s for _, _, s in top), min(0.7 + len(sentences) * 0.02, 0.95)
+    result = " ".join(s for _, _, s in top)
+    # If the prompt asks for exactly one sentence and we output one sentence, boost confidence
+    if re.search(r"exactly one sentence|one sentence only|single sentence", prompt, re.I) and len(top) == 1:
+        return result, 0.9
+    return result, min(0.7 + len(sentences) * 0.02, 0.95)
 
 
 _BUILTIN_NAMES = set(dir(builtins))
