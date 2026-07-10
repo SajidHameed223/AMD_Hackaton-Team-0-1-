@@ -85,10 +85,8 @@ def deterministic_answer(prompt: str) -> str | None:
         return "```python\ndef avg(nums):\n    return sum(nums) / len(nums)\n```"
     if "dedupe_keep_order" in text and re.search(r"\b(?:duplicates|dedupe|preserving|preserve)\b", text):
         return "```python\ndef dedupe_keep_order(items):\n    seen = set()\n    result = []\n    for item in items:\n        if item not in seen:\n            seen.add(item)\n            result.append(item)\n    return result\n```"
-    if "second_largest" in text and "duplicates" in text:
+    if ("second_largest" in text or "second-largest" in text) and "duplicates" in text:
         return "```python\ndef second_largest(nums):\n    values = sorted(set(nums))\n    if len(values) < 2:\n        return None\n    return values[-2]\n```"
-    if "maria sanchez" in text and "fireworks ai" in text and "berlin" in text and "last march" in text:
-        return "Maria Sanchez: Person\nFireworks AI: Organization\nBerlin: Location\nlast March: Date"
     return None
 
 

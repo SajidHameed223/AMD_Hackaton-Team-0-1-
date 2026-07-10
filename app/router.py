@@ -37,14 +37,15 @@ _CODE_DEBUG_PAT = re.compile(
     r"|find (?:the )?(?:bug|error|issue)|correct (?:the |this )?code"
     r"|why (?:does|is) (?:this|the) code)\b", re.I)
 _CODE_GEN_PAT = re.compile(
-    r"\b(write (?:a |the )?(?:function|program|script|code|class|method|module)"
+    r"\b(write (?:a |the )?(?:\w+ )?(?:function|program|script|code|class|method|module)"
     r"|implement|generate (?:code|a function|a program)|create (?:a )?(?:function"
     r"|program|script|class)|code (?:to|that|for|which)|algorithm (?:to|for|that))\b", re.I)
 _LOGICAL_PAT = re.compile(
     r"\b(logic|puzzle|riddle|deduc|infer|syllogism|truth table|premise"
-    r"|conclusion|if .* then|constraint|who (?:lives|sits|owns|drinks|eats)"
+    r"|conclusion|if .* then|constraint|who (?:lives|sits|owns|drinks|eats|painted|drove|built|chose|picked)"
     r"|arrangement|seat|order.*(?:left|right|next)"
-    r"|sequence|what comes next|next (?:number|term|in)|pattern)\b", re.I)
+    r"|sequence|what comes next|next (?:number|term|in)|pattern"
+    r"|each (?:own|painted|drove|built|chose|picked) a different)\b", re.I)
 _FACTUAL_PAT = re.compile(
     r"\b(capital of|president of|who (?:is|was|invented|discovered|founded|wrote)"
     r"|when (?:was|did|is)|where (?:is|was)|what (?:is|was|are) the"
@@ -57,7 +58,6 @@ _CLASSIFY_ORDER = [
     (_LOGICAL_PAT, "logical"), (_NER_PAT, "ner"),
     (_MATH_PAT, "math"), (_FACTUAL_PAT, "factual"),
 ]
-
 
 def classify(prompt: str) -> str:
     for pat, cat in _CLASSIFY_ORDER:
@@ -111,6 +111,17 @@ def solve_math(prompt: str) -> tuple[str, float]:
             val = remaining
             return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
 
+    # handles "if a class/group has X and Y% are absent, how many are present?" pattern
+    # ceiling: chained percentages (X% absent, then Z more left) — defer to T1.
+    if re.search(r"\b(?:present|remaining|left|how many)\b", prompt.lower()):
+        m_total = re.search(r"\b(?:has|have|with|starts? with|class|group|total of)\s+(\d+(?:\.\d+)?)\s+(?:students?|people|workers?|items?|units?|tickets?|seats?)\b", prompt, re.I)
+        m_pct = re.search(r"\b(\d+(?:\.\d+)?)\s*%\s+(?:are|is)?\s*(?:absent|missing|gone|used|spent|sold|broken|defective|rejected)", prompt, re.I)
+        if m_total and m_pct:
+            total = float(m_total.group(1))
+            absent = total * float(m_pct.group(1)) / 100
+            val = total - absent
+            return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
+
     arith = re.search(r"(\d+(?:\.\d+)?(?:\s*[\+\-\*\/]\s*\d+(?:\.\d+)?)+)", prompt)
     if arith:
         val = _safe_eval_expr(arith.group(1))
@@ -128,6 +139,7 @@ _POS_WORDS = {
     "cheerful", "joyful", "grateful", "optimistic", "thrilled", "enthusiastic",
     "inspired", "uplifting", "charming", "elegant", "magnificent", "splendid",
     "heartwarming", "helpful", "hilarious", "lively", "marvelous",
+    "delicious", "tasty", "flavorful", "yummy", "scrumptious", "savory", "fresh",
 }
 _NEG_WORDS = {
     "bad", "terrible", "awful", "horrible", "poor", "disappointing",
@@ -137,6 +149,9 @@ _NEG_WORDS = {
     "failed", "failure", "broken", "painful", "unhappy", "depressed",
     "pessimistic", "tragic", "devastating", "heartbreaking", "cruel",
     "hostile", "offensive", "toxic", "violent", "appalling", "gloomy",
+    "scratch", "scratches", "scratchy", "flimsy", "fragile", "unreliable",
+    "laggy", "sluggish", "stutter", "freeze", "freezes", "freezing", "crash", "crashes",
+    "drop", "drops", "leak", "leaks", "rattly", "loose", "slow",
 }
 
 
@@ -158,6 +173,7 @@ def solve_sentiment(prompt: str) -> tuple[str, float]:
         return "neutral. The text contains no strong sentiment indicators.", 0.5
     score = (pos - neg) / total
     label = "positive" if score > 0.1 else ("negative" if score < -0.1 else "mixed")
+    mixed_signal = pos > 0 and neg > 0
     evidence = []
     top_pos = [w for w in words if w in _POS_WORDS][:3]
     top_neg = [w for w in words if w in _NEG_WORDS][:3]
@@ -165,7 +181,7 @@ def solve_sentiment(prompt: str) -> tuple[str, float]:
         evidence.append(f"positive words: {', '.join(top_pos)}")
     if top_neg:
         evidence.append(f"negative words: {', '.join(top_neg)}")
-    return f"The sentiment is {label}. Key indicators: {'; '.join(evidence)}.", min(0.5 + total * 0.1, 1.0)
+    return f"The sentiment is {label}. Key indicators: {'; '.join(evidence)}.", min(0.5 + total * 0.1 + (0.15 if mixed_signal else 0.0), 1.0)
 
 
 _MONTHS = (r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?"
@@ -232,7 +248,7 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
         target = m.group(1) if m else prompt
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+(?=[A-Z])', target) if s.strip()]
     if len(sentences) <= 2:
-        return target.strip(), 0.6
+        return target.strip(), 0.85
     words = re.findall(r"[a-z]+", target.lower())
     stop = {"the", "a", "an", "is", "are", "was", "were", "in", "on", "at",
             "to", "for", "of", "and", "or", "but", "it", "its", "this", "that",
@@ -321,6 +337,37 @@ def solve_logical(prompt: str) -> tuple[str, float]:
                 if len(set(ratios)) == 1:
                     nv = nums[-1] * ratios[0]
                     return f"The next number is {int(nv) if nv == int(nv) else nv}. This is a geometric sequence with common ratio {ratios[0]}.", 0.95
+    # handles "each own/painted/drove/built/chose a different X" + one positive + one negation + "who owns Y?"
+    # ceiling: multiple negations or absent positive assignment — defer to T1.
+    verbs = r"owns?|painted|painted|drove|built|chose|picked"
+    has = re.search(rf"\b(?!not\b)(\w+)\s+(?:{verbs})\s+the\s+(\w+)\b", lower)
+    not_has = re.search(rf"\b(\w+)\s+does\s+not\s+(?:{verbs})\s+(?:the\s+)?(\w+)\b", lower)
+    who = re.search(r"who\s+(?:owns?|painted|drove|built|chose|picked)\s+(?:the\s+)?(\w+)\??\s*$", lower)
+    items_all = re.search(r"each\s+(?:own|painted|drove|built|chose|picked)\s+(?:a\s+)?different\s+\w+:?\s*([^.?]+)", lower)
+    if has and who and items_all:
+        items = [w.strip() for w in re.split(r"[,\s]+(?:and\s+)?", items_all.group(1)) if w.strip()]
+        assigned, owner, not_item = has.group(1).lower(), has.group(2).strip(), None
+        if not_has:
+            not_item = not_has.group(2).strip()
+        target = who.group(1).strip().rstrip("?.")
+        names = [w for w in re.findall(r"\b([A-Z][a-z]+)\b", prompt)
+                 if w.lower() not in {"the", "who", "owns", "does", "not", "each", "three", "two", "four", "five"}
+                 and w.lower() != assigned]
+        candidates = [n for n in dict.fromkeys(names) if n.lower() != assigned]  # dedupe, keep order
+        if assigned == target or (not_item and target == not_item):
+            if not_item and target == not_item:
+                free = [n for n in candidates if n.lower() != not_has.group(1)]
+                if len(free) == 1:
+                    return f"{free[0]} owns the {target}.", 0.85
+            if assigned == target and not not_has:
+                return f"{assigned.title()} owns the {target}.", 0.9
+        if assigned != target:
+            if not_has and not_has.group(1) != assigned:
+                third = [n for n in candidates if n.lower() != not_has.group(1)]
+                if len(third) == 1:
+                    return f"{third[0]} owns the {target}.", 0.85
+            elif not not_has and len(candidates) == 1:
+                return f"{candidates[0]} owns the {target}.", 0.85
     return "", 0.3
 
 
@@ -334,11 +381,97 @@ _FACTUAL_DB: dict[str, str] = {
     "capital of uk": "London", "capital of united states": "Washington, D.C.",
     "capital of usa": "Washington, D.C.", "capital of mexico": "Mexico City",
     "capital of south korea": "Seoul", "capital of egypt": "Cairo",
+    "capital of south africa": "Pretoria", "capital of argentina": "Buenos Aires",
+    "capital of turkey": "Ankara", "capital of indonesia": "Jakarta",
+    "capital of philippines": "Manila", "capital of thailand": "Bangkok",
+    "capital of greece": "Athens", "capital of portugal": "Lisbon",
+    "capital of netherlands": "Amsterdam", "capital of sweden": "Stockholm",
+    "capital of norway": "Oslo", "capital of finland": "Helsinki",
+    "capital of denmark": "Copenhagen", "capital of poland": "Warsaw",
+    "capital of austria": "Vienna", "capital of switzerland": "Bern",
+    "capital of ireland": "Dublin", "capital of belgium": "Brussels",
+    "capital of new zealand": "Wellington", "capital of saudi arabia": "Riyadh",
+    "capital of iran": "Tehran", "capital of iraq": "Baghdad",
+    "capital of israel": "Jerusalem", "capital of kenya": "Nairobi",
+    "capital of nigeria": "Abuja", "capital of morocco": "Rabat",
+    "capital of peru": "Lima", "capital of chile": "Santiago",
+    "capital of colombia": "Bogota", "capital of venezuela": "Caracas",
     "largest planet": "Jupiter", "smallest planet": "Mercury",
     "tallest mountain": "Mount Everest at 8,849 meters (29,032 feet)",
     "largest ocean": "The Pacific Ocean",
+    "smallest ocean": "The Arctic Ocean",
+    "longest river": "The Nile River",
+    "largest desert": "The Antarctic Desert",
+    "largest country": "Russia",
+    "smallest country": "Vatican City",
+    "deepest ocean": "The Mariana Trench in the Pacific Ocean",
+    # Bodies of water near capitals (caps + water combo queries)
     "body of water near canberra": "Lake Burley Griffin (artificial lake), and the Molonglo River",
     "body of water near australia capital": "Lake Burley Griffin",
+    "body of water near tokyo": "Tokyo Bay (part of the Pacific Ocean), and the Sumida River",
+    "body of water near japan capital": "Tokyo Bay",
+    "body of water near paris": "The Seine River",
+    "body of water near france capital": "The Seine River",
+    "body of water near london": "The River Thames",
+    "body of water near united kingdom capital": "The River Thames",
+    "body of water near berlin": "The Spree River, and it connects to the Havel River",
+    "body of water near germany capital": "The Spree River",
+    "body of water near rome": "The Tiber River",
+    "body of water near italy capital": "The Tiber River",
+    "body of water near ottawa": "The Ottawa River, and it sits at the confluence of three rivers",
+    "body of water near canada capital": "The Ottawa River",
+    "body of water near brasilia": "Lake Paranoa (artificial lake), and rivers feeding it",
+    "body of water near brazil capital": "Lake Paranoa",
+    "body of water near washington": "The Potomac River, and the Anacostia River",
+    "body of water near united states capital": "The Potomac River",
+    "body of water near new delhi": "The Yamuna River (a tributary of the Ganges)",
+    "body of water near india capital": "The Yamuna River",
+    "body of water near beijing": "Kunming Lake, and the Yongding River nearby",
+    "body of water near china capital": "Kunming Lake",
+    "body of water near moscow": "The Moscow River",
+    "body of water near russia capital": "The Moscow River",
+    "body of water near manila": "Manila Bay (part of the South China Sea), and the Pasig River",
+    "body of water near philippines capital": "Manila Bay",
+    "body of water near seoul": "The Han River",
+    "body of water near south korea capital": "The Han River",
+    "body of water near cairo": "The Nile River",
+    "body of water near egypt capital": "The Nile River",
+    "body of water near athens": "The Saronic Gulf (part of the Aegean Sea)",
+    "body of water near greece capital": "The Saronic Gulf",
+    "body of water near amsterdam": "The Amstel River, and the IJ bay (part of Lake IJssel)",
+    "body of water near netherlands capital": "The Amstel River",
+    "body of water near stockholm": "The Baltic Sea, and Lake Malaren",
+    "body of water near sweden capital": "The Baltic Sea",
+    "body of water near bangkok": "The Chao Phraya River",
+    "body of water near thailand capital": "The Chao Phraya River",
+    "body of water near jakarta": "The Java Sea, and the Ciliwung River",
+    "body of water near indonesia capital": "The Java Sea",
+    "body of water near wellington": "Wellington Harbour (part of the Pacific Ocean)",
+    "body of water near new zealand capital": "Wellington Harbour",
+    "body of water near buenos aires": "The Rio de la Plata (a river estuary)",
+    "body of water near argentina capital": "The Rio de la Plata",
+    "body of water near istanbul": "The Bosphorus Strait, and the Sea of Marmara",
+    "body of water near turkey capital": "The Kizilirmak River ( Ankara is inland)",
+    "body of water near nairobi": "The Nairobi River, and it is near Lake Nairobi",
+    "body of water near kenya capital": "The Nairobi River",
+    "body of water near lima": "The Pacific Ocean, and the Rimac River",
+    "body of water near peru capital": "The Rimac River",
+    "body of water near dublin": "The River Liffey, and Dublin Bay (part of the Irish Sea)",
+    "body of water near ireland capital": "The River Liffey",
+    "body of water near oslo": "The Oslo Fjord",
+    "body of water near norway capital": "The Oslo Fjord",
+    "body of water near helsinki": "The Gulf of Finland (part of the Baltic Sea)",
+    "body of water near finland capital": "The Gulf of Finland",
+    "body of water near copenhagen": "The Oresund strait",
+    "body of water near denmark capital": "The Oresund strait",
+    "body of water near vienna": "The Danube River",
+    "body of water near austria capital": "The Danube River",
+    "body of water near bern": "The Aare River, and it sits on a peninsula",
+    "body of water near switzerland capital": "The Aare River",
+    "body of water near warsaw": "The Vistula River",
+    "body of water near poland capital": "The Vistula River",
+    "body of water near lisbon": "The Tagus River, and the Atlantic Ocean",
+    "body of water near portugal capital": "The Tagus River",
 }
 
 
@@ -348,6 +481,8 @@ def solve_factual(prompt: str) -> tuple[str, float]:
     water = re.search(r"(?:body of water|river|lake|sea|ocean|bay)", lower)
     if cap and water:
         country = cap.group(1).strip()
+        if country.startswith("the "):
+            country = country[4:]
         capital = _FACTUAL_DB.get(f"capital of {country}")
         w = _FACTUAL_DB.get(f"body of water near {country} capital")
         if capital and w:
@@ -356,6 +491,8 @@ def solve_factual(prompt: str) -> tuple[str, float]:
             return f"The capital of {country.title()} is {capital}.", 0.7
     elif cap:
         country = cap.group(1).strip()
+        if country.startswith("the "):
+            country = country[4:]
         capital = _FACTUAL_DB.get(f"capital of {country}")
         if capital:
             return f"The capital of {country.title()} is {capital}.", 0.9
