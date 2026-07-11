@@ -34,6 +34,7 @@ class HarnessCycleTests(unittest.TestCase):
         result = run_cycle("What is the answer?", "math", model)
         self.assertEqual(result["answer"], "42")
         self.assertEqual(len(model.calls), 3)
+        self.assertEqual(model.calls[0][2], 512)
         self.assertEqual(result["harness"]["validation_score"], 100)
 
     def test_trivial_cycle_skips_model_judge_after_deterministic_check(self):

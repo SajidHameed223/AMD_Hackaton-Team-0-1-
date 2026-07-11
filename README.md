@@ -142,11 +142,12 @@ existing fallback if the local validator cannot accept an answer.
 
 The default local deadline is 26 seconds, preserving headroom inside Track 1's
 30-second request limit for routing, output serialization, and a possible T2
-handoff. Category profiles determine answer length; analyzer and validator
-ceilings are intentionally generous enough for structured plans and correction
-reports. The deadline, rather than premature truncation, controls runtime. A
-deadline or exhausted local repair cycle returns control to the existing T2
-path.
+handoff. Stage 1 is the harness's practical reasoning budget: it emits a
+structured plan instead of raw chain-of-thought, and math, logic, debugging,
+and code-generation tasks receive up to 512 planning tokens by default.
+Category profiles determine answer length. The deadline, rather than premature
+truncation, controls runtime. A deadline or exhausted local repair cycle returns
+control to the existing T2 path.
 
 The structured analysis can request only calculator, optional web grounding,
 UTC time, Python syntax checking, or restricted Python execution. Web grounding
