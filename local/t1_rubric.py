@@ -46,6 +46,7 @@ def rubric_for(category: str, difficulty: str = "medium") -> dict[str, Any]:
         "difficulty_requirement": DIFFICULTY_CHECKS[difficulty],
         "pass_threshold": 90,
         "critical_rule": "Any factual, arithmetic, logical, evidence-use, executable-code, or explicit-format error is an automatic failure.",
+        "acceptance_policy": "Accept semantically correct answers. Suggestions about style, optional detail, wording, or unrequested explanation are advisory and must not cause failure.",
     }
 
 
@@ -98,14 +99,18 @@ def parse_verdict(raw: str) -> dict[str, Any] | None:
         score = max(0, min(100, int(float(parsed.get("score", 0)))))
     except (TypeError, ValueError):
         score = 0
-    errors = parsed.get("errors", [])
+    legacy_errors = parsed.get("errors", [])
+    critical_errors = parsed.get("critical_errors", legacy_errors)
+    improvements = parsed.get("improvements", parsed.get("warnings", []))
     fixes = parsed.get("required_fixes", [])
-    errors = errors if isinstance(errors, list) else [errors]
+    critical_errors = critical_errors if isinstance(critical_errors, list) else [critical_errors]
+    improvements = improvements if isinstance(improvements, list) else [improvements]
     fixes = fixes if isinstance(fixes, list) else [fixes]
     return {
         "pass": bool(parsed.get("pass", False)),
         "score": score,
-        "errors": [str(item)[:300] for item in errors[:8]],
+        "critical_errors": [str(item)[:300] for item in critical_errors[:8] if str(item).strip()],
+        "improvements": [str(item)[:300] for item in improvements[:8] if str(item).strip()],
         "required_fixes": [str(item)[:300] for item in fixes[:8]],
         "confidence": parsed.get("confidence"),
     }
@@ -116,18 +121,28 @@ def merge_verdict(model_verdict: dict[str, Any] | None, deterministic: dict[str,
         return {
             "pass": deterministic["pass"],
             "score": 90 if deterministic["pass"] else 0,
+            "model_score": None,
             "errors": deterministic["errors"],
+            "critical_errors": deterministic["errors"],
+            "improvements": [],
             "required_fixes": deterministic["errors"],
             "warnings": deterministic["warnings"],
             "judge_available": False,
+            "judge_overruled": False,
         }
-    errors = list(dict.fromkeys(model_verdict["errors"] + deterministic["errors"]))
+    critical_errors = list(dict.fromkeys(model_verdict["critical_errors"] + deterministic["errors"]))
     fixes = list(dict.fromkeys(model_verdict["required_fixes"] + deterministic["errors"]))
+    accepted = bool(deterministic["pass"] and not model_verdict["critical_errors"])
+    judge_overruled = bool(accepted and (not model_verdict["pass"] or model_verdict["score"] < 90))
     return {
         **model_verdict,
-        "pass": bool(model_verdict["pass"] and model_verdict["score"] >= 90 and deterministic["pass"]),
-        "errors": errors,
+        "pass": accepted,
+        "score": max(model_verdict["score"], 90) if accepted else model_verdict["score"],
+        "model_score": model_verdict["score"],
+        "errors": critical_errors,
+        "critical_errors": critical_errors,
         "required_fixes": fixes,
         "warnings": deterministic["warnings"],
         "judge_available": True,
+        "judge_overruled": judge_overruled,
     }

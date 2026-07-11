@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from local.t1_inference import ANALYZER_SYSTEM, DeadlineExceeded, HarnessFailure, run_cycle
 from local.t1_prompting import playbook_for
-from local.t1_rubric import deterministic_checks, rubric_for
+from local.t1_rubric import deterministic_checks, merge_verdict, parse_verdict, rubric_for
 from local.t1_tools import execute_python, safe_calculate
 
 
@@ -26,8 +26,9 @@ class ScriptedModel:
 
 PLAN = '{"task_summary":"task","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"direct","verification_checks":[],"difficulty":"easy","risk_flags":[],"output_contract":"direct answer","requires_external":false,"trivial":false}'
 TRIVIAL_PLAN = '{"task_summary":"label","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"label","verification_checks":[],"difficulty":"easy","risk_flags":[],"output_contract":"one label","requires_external":false,"trivial":true}'
-PASS = '{"pass":true,"score":100,"errors":[],"required_fixes":[],"confidence":1}'
-FAIL = '{"pass":false,"score":20,"errors":["wrong result"],"required_fixes":["recalculate"],"confidence":1}'
+PASS = '{"pass":true,"score":100,"critical_errors":[],"improvements":[],"required_fixes":[],"confidence":1}'
+FAIL = '{"pass":false,"score":20,"critical_errors":["wrong result"],"improvements":[],"required_fixes":["recalculate"],"confidence":1}'
+STYLE_ONLY_REJECTION = '{"pass":false,"score":72,"critical_errors":[],"improvements":["Could be more detailed"],"required_fixes":[],"confidence":0.7}'
 
 
 class HarnessCycleTests(unittest.TestCase):
@@ -63,6 +64,15 @@ class HarnessCycleTests(unittest.TestCase):
         result = run_cycle("Answer directly", "default", model)
         self.assertEqual(result["answer"], "a direct answer")
         self.assertFalse(result["harness"]["judge_available"])
+
+    def test_style_only_rejection_does_not_trigger_repair(self):
+        model = ScriptedModel([PLAN, "A correct concise answer.", STYLE_ONLY_REJECTION])
+        result = run_cycle("Answer directly", "default", model)
+        self.assertEqual(result["answer"], "A correct concise answer.")
+        self.assertEqual(result["harness"]["repair_count"], 0)
+        self.assertTrue(result["harness"]["validator_overruled"])
+        self.assertEqual(result["harness"]["validator_model_score"], 72)
+        self.assertEqual(result["harness"]["validation_score"], 90)
 
     def test_deadline_stops_the_cycle_before_additional_local_calls(self):
         model = ScriptedModel([PLAN])
@@ -140,6 +150,14 @@ class ToolTests(unittest.TestCase):
         rubric = rubric_for("logical", "hard")
         self.assertIn("interacting constraints", rubric["difficulty_requirement"])
         self.assertIn("Tools may only be calculator, python_syntax, python_execute, or current_time", ANALYZER_SYSTEM)
+
+    def test_deterministic_failure_cannot_be_overruled(self):
+        merged = merge_verdict(
+            parse_verdict(PASS),
+            {"pass": False, "errors": ["Explicit format mismatch."], "warnings": []},
+        )
+        self.assertFalse(merged["pass"])
+        self.assertIn("Explicit format mismatch.", merged["critical_errors"])
 
 
 class SolveBoundaryTests(unittest.TestCase):

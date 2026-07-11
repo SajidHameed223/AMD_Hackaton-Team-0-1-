@@ -149,6 +149,11 @@ Category profiles determine answer length. The deadline, rather than premature
 truncation, controls runtime. A deadline or exhausted local repair cycle returns
 control to the existing T2 path.
 
+Validation distinguishes objective critical errors from advisory improvements.
+Only demonstrable correctness, completeness, executable-code, evidence-use, or
+explicit-format failures trigger repair or escalation; preferences about style,
+wording, optional detail, or unrequested explanation do not reject a good answer.
+
 The structured analysis uses category- and difficulty-specific playbooks for all
 eight Track 1 capabilities. It can request only a calculator, UTC time, Python
 syntax checking, or restricted Python execution. The local harness contains no
