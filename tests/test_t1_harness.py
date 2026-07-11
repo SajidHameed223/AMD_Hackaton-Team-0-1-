@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from local.t1_inference import HarnessFailure, run_cycle
+from local.t1_inference import DeadlineExceeded, HarnessFailure, run_cycle
 from local.t1_tools import execute_python, safe_calculate, web_search
 
 
@@ -60,6 +60,13 @@ class HarnessCycleTests(unittest.TestCase):
         result = run_cycle("Answer directly", "default", model)
         self.assertEqual(result["answer"], "a direct answer")
         self.assertFalse(result["harness"]["judge_available"])
+
+    def test_deadline_stops_the_cycle_before_additional_local_calls(self):
+        model = ScriptedModel([PLAN])
+        with patch("local.t1_inference.time.monotonic", side_effect=[0, 0, 0, 30, 30]):
+            with self.assertRaises(DeadlineExceeded):
+                run_cycle("Time-bound task", "default", model)
+        self.assertEqual(len(model.calls), 1)
 
     def test_calculator_evidence_is_passed_to_answerer(self):
         plan = '{"task_summary":"math","requirements":[],"assumptions":[],"tools":[{"name":"calculator","input":"2 + 3 * 4"}],"evidence_needs":[],"answer_strategy":"use tool","verification_checks":[],"trivial":false}'

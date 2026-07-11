@@ -140,6 +140,12 @@ repairs. It never exposes raw chain-of-thought or changes the submission
 contract: `solve.py` still emits only `{task_id, answer}` and retains T2 as the
 existing fallback if the local validator cannot accept an answer.
 
+The default local deadline is 26 seconds, preserving headroom inside Track 1's
+30-second request limit for routing, output serialization, and a possible T2
+handoff. Analyzer and validator responses are deliberately compact; code tasks
+receive a larger answer/repair allowance than other categories. A deadline or
+exhausted local repair cycle returns control to the existing T2 path.
+
 The structured analysis can request only calculator, optional web grounding,
 UTC time, Python syntax checking, or restricted Python execution. Web grounding
 is disabled by default because the grading network is not guaranteed. Successful
