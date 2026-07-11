@@ -95,8 +95,10 @@ def _try_local_infer(prompt: str, category: str) -> str | None:
     try:
         from local.t1_inference import generate  # lazy — triggers model load
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)
-        return result.get("answer", "")
+        return result.get("answer", "").strip() or None
     except Exception as exc:
+        # Team policy: an exhausted local repair cycle enters existing T2. If
+        # this conflicts with the routing strategy, remove this fallback here.
         print(f"  T1 failed: {exc}", file=sys.stderr)
         return None
 

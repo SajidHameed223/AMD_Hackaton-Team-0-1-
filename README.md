@@ -131,6 +131,25 @@ exits `0`.
 > Note: large weight files are excluded from git (see `.gitignore`). They are
 > present in the built image, not in the source repo.
 
+### Multi-stage local harness
+
+For non-deterministic T1 tasks, `local/t1_inference.py` reuses the one loaded
+local model for a bounded cycle: structured analysis, approved local tools,
+answer generation, independent rubric validation, and up to two targeted
+repairs. It never exposes raw chain-of-thought or changes the submission
+contract: `solve.py` still emits only `{task_id, answer}` and retains T2 as the
+existing fallback if the local validator cannot accept an answer.
+
+The structured analysis can request only calculator, optional web grounding,
+UTC time, Python syntax checking, or restricted Python execution. Web grounding
+is disabled by default because the grading network is not guaranteed. Successful
+grounded current/factual answers must include source URLs. Audit logs store only
+safe metadata such as prompt hashes, stage timings, validation scores, and tool
+status; they do not store prompts, answers, retrieved text, or credentials.
+
+Tune the bounded stage and tool limits through the `LOCAL_T1_*`,
+`LOCAL_WEB_SEARCH_*`, and `LOCAL_PYTHON_*` variables in `.env.example`.
+
 ---
 
 ## Environment variables
