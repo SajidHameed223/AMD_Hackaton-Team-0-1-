@@ -11,7 +11,7 @@ from typing import Any
 DIMENSIONS = {
     "correctness": 40,
     "instruction_compliance": 20,
-    "grounding": 15,
+    "evidence_fidelity": 15,
     "completeness": 15,
     "format_precision": 10,
 }
@@ -30,12 +30,22 @@ REQUIREMENTS = {
 }
 
 
-def rubric_for(category: str) -> dict[str, Any]:
+DIFFICULTY_CHECKS = {
+    "easy": "Confirm the direct answer and exact requested format.",
+    "medium": "Check every requested clause and the category's main edge case.",
+    "hard": "Re-evaluate interacting constraints, ambiguity, and adversarial edge cases independently.",
+}
+
+
+def rubric_for(category: str, difficulty: str = "medium") -> dict[str, Any]:
+    difficulty = difficulty if difficulty in DIFFICULTY_CHECKS else "medium"
     return {
         "dimensions": DIMENSIONS,
         "category_requirement": REQUIREMENTS.get(category, REQUIREMENTS["default"]),
+        "difficulty": difficulty,
+        "difficulty_requirement": DIFFICULTY_CHECKS[difficulty],
         "pass_threshold": 90,
-        "critical_rule": "Any factual, arithmetic, logical, grounding, executable-code, or explicit-format error is an automatic failure.",
+        "critical_rule": "Any factual, arithmetic, logical, evidence-use, executable-code, or explicit-format error is an automatic failure.",
     }
 
 
@@ -51,10 +61,10 @@ def deterministic_checks(prompt: str, answer: str, category: str, evidence: list
     lower_prompt = prompt.lower()
     if not answer:
         errors.append("The answer is empty.")
-    if category == "sentiment" and re.search(r"\b(positive|negative|neutral)\b", lower_prompt):
-        labels = re.findall(r"\b(positive|negative|neutral)\b", answer.lower())
+    if category == "sentiment":
+        labels = re.findall(r"\b(positive|negative|neutral|mixed)\b", answer.lower())
         if len(labels) != 1:
-            errors.append("Sentiment output must contain exactly one allowed label.")
+            errors.append("Sentiment output must contain exactly one classification label: positive, negative, neutral, or mixed.")
     if category in {"summary", "summarization"}:
         if "exactly one sentence" in lower_prompt or "one sentence only" in lower_prompt:
             sentences = [part for part in re.split(r"(?<=[.!?])\s+", answer) if part.strip()]

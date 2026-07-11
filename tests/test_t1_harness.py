@@ -6,8 +6,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from local.t1_inference import DeadlineExceeded, HarnessFailure, run_cycle
-from local.t1_tools import execute_python, safe_calculate, web_search
+from local.t1_inference import ANALYZER_SYSTEM, DeadlineExceeded, HarnessFailure, run_cycle
+from local.t1_prompting import playbook_for
+from local.t1_rubric import deterministic_checks, rubric_for
+from local.t1_tools import execute_python, safe_calculate
 
 
 class ScriptedModel:
@@ -22,8 +24,8 @@ class ScriptedModel:
         return self.responses.pop(0)
 
 
-PLAN = '{"task_summary":"task","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"direct","verification_checks":[],"trivial":false}'
-TRIVIAL_PLAN = '{"task_summary":"label","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"label","verification_checks":[],"trivial":true}'
+PLAN = '{"task_summary":"task","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"direct","verification_checks":[],"difficulty":"easy","risk_flags":[],"output_contract":"direct answer","requires_external":false,"trivial":false}'
+TRIVIAL_PLAN = '{"task_summary":"label","requirements":[],"assumptions":[],"tools":[],"evidence_needs":[],"answer_strategy":"label","verification_checks":[],"difficulty":"easy","risk_flags":[],"output_contract":"one label","requires_external":false,"trivial":true}'
 PASS = '{"pass":true,"score":100,"errors":[],"required_fixes":[],"confidence":1}'
 FAIL = '{"pass":false,"score":20,"errors":["wrong result"],"required_fixes":["recalculate"],"confidence":1}'
 
@@ -70,10 +72,29 @@ class HarnessCycleTests(unittest.TestCase):
         self.assertEqual(len(model.calls), 1)
 
     def test_calculator_evidence_is_passed_to_answerer(self):
-        plan = '{"task_summary":"math","requirements":[],"assumptions":[],"tools":[{"name":"calculator","input":"2 + 3 * 4"}],"evidence_needs":[],"answer_strategy":"use tool","verification_checks":[],"trivial":false}'
+        plan = '{"task_summary":"math","requirements":[],"assumptions":[],"tools":[{"name":"calculator","input":"2 + 3 * 4"}],"evidence_needs":[],"answer_strategy":"use tool","verification_checks":[],"difficulty":"easy","risk_flags":[],"output_contract":"number","requires_external":false,"trivial":false}'
         model = ScriptedModel([plan, "14", PASS])
         run_cycle("Calculate 2 + 3 * 4", "math", model)
         self.assertIn('"result":14', model.calls[1][1])
+
+    def test_freshness_task_returns_to_approved_external_route(self):
+        plan = PLAN.replace('"requires_external":false', '"requires_external":true')
+        model = ScriptedModel([plan])
+        with self.assertRaisesRegex(HarnessFailure, "approved external inference"):
+            run_cycle("What is the latest stable version?", "factual", model)
+        self.assertEqual(len(model.calls), 1)
+
+    def test_deterministic_difficulty_floor_overrides_easy_plan(self):
+        prompt = "Assign Alice, Bob, Carol, Dave, and Erin exactly one different role; apply all conditions and prove the result is unique."
+        model = ScriptedModel([PLAN, "A valid assignment.", PASS])
+        result = run_cycle(prompt, "logical", model)
+        self.assertEqual(result["harness"]["difficulty"], "hard")
+        self.assertIn("underdetermined", model.calls[1][1])
+
+    def test_router_category_alias_receives_code_debug_playbook(self):
+        model = ScriptedModel([PLAN, "```python\ndef fixed():\n    return 1\n```", PASS])
+        run_cycle("Debug and correct this function: def fixed(): return 1", "debug", model)
+        self.assertIn("behavioral defect", model.calls[1][1])
 
     def test_audit_log_does_not_contain_prompt_or_answer(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -98,22 +119,27 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(blocked["ok"])
         self.assertIn("forbidden import", blocked["error"])
 
-    def test_web_search_is_safe_when_disabled(self):
-        with patch.dict(os.environ, {"LOCAL_WEB_SEARCH_ENABLED": "0"}, clear=False):
-            result = web_search("current weather")
-        self.assertFalse(result["available"])
-        self.assertEqual(result["error"], "web search disabled")
-
-    def test_grounded_answer_does_not_require_a_public_url(self):
-        from local.t1_rubric import deterministic_checks
-
+    def test_mixed_sentiment_is_an_allowed_single_label(self):
         result = deterministic_checks(
-            "What is the current weather?",
-            "It is currently clear.",
-            "factual",
-            [{"tool": "web_search", "ok": True, "results": [{"url": "https://example.test"}]}],
+            "Classify the sentiment and justify it.",
+            "Mixed — the review praises battery life but criticizes durability.",
+            "sentiment",
+            [],
         )
         self.assertTrue(result["pass"])
+
+    def test_all_track1_categories_have_difficulty_playbooks(self):
+        categories = ["factual", "math", "sentiment", "summarization", "ner", "code_debug", "logical", "code_gen"]
+        for category in categories:
+            for difficulty in ("easy", "medium", "hard"):
+                playbook = playbook_for(category, difficulty)
+                self.assertEqual(playbook["difficulty"], difficulty)
+                self.assertTrue(playbook["checks"])
+
+    def test_hard_rubric_and_analyzer_allow_only_local_tools(self):
+        rubric = rubric_for("logical", "hard")
+        self.assertIn("interacting constraints", rubric["difficulty_requirement"])
+        self.assertIn("Tools may only be calculator, python_syntax, python_execute, or current_time", ANALYZER_SYSTEM)
 
 
 class SolveBoundaryTests(unittest.TestCase):
