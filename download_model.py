@@ -13,7 +13,7 @@ Requires: pip install transformers torch
 
 import os
 
-MODEL_NAME = os.getenv("MODEL_NAME", "google/gemma-2b-it")
+MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-3B-Instruct")
 SAVE_DIR = os.path.join("models", MODEL_NAME.split("/")[-1])
 
 

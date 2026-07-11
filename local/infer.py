@@ -20,8 +20,7 @@ def compress_prompt(prompt, task_type, speed_mode: bool = True):
     else:
         base = prompt
 
-    # In fast mode, force concise completion style so outputs fit token caps.
-    if speed_mode:
+    if speed_mode and task_type not in ("code", "code_debug", "code_gen"):
         return (
             "Respond in plain text with no heading, no bullet points, and no markdown. "
             "Keep the answer to 2 short sentences (max 60 words). "
@@ -109,6 +108,10 @@ def _local_generate(
     try:
         # Load model and tokenizer (may be cached)
         model, tokenizer = get_model_and_tokenizer(model_id)
+        
+        # No local model configured — fail fast so T2 can take over
+        if model is None or tokenizer is None:
+            raise RuntimeError("Local model not configured (MODEL_NAME not set)")
 
         profile = get_profile(task_type)
         optimized_prompt = compress_prompt(prompt, task_type, speed_mode=speed_mode)
@@ -116,9 +119,9 @@ def _local_generate(
         inputs = tokenizer(input_text, return_tensors="pt").to(model.device)
 
         # Cap tokens with separate fast/quality controls.
-        max_tokens = min(profile["max_tokens"], 96) if speed_mode else profile["max_tokens"]
+        max_tokens = profile["max_tokens"]  # use full profile caps for quality
 
-        speed_cap = int(os.getenv("SPEED_MAX_NEW_TOKENS_CAP", "48"))
+        speed_cap = int(os.getenv("SPEED_MAX_NEW_TOKENS_CAP", "256"))  # 48 cut all code/debug output short
         quality_cap = int(os.getenv("QUALITY_MAX_NEW_TOKENS_CAP", "160"))
         max_tokens = min(max_tokens, speed_cap if speed_mode else quality_cap)
 
@@ -129,7 +132,7 @@ def _local_generate(
 
         # Hard cap for CPU/offloaded execution so requests stay responsive.
         if not torch.cuda.is_available():
-            max_tokens = min(max_tokens, int(os.getenv("CPU_MAX_NEW_TOKENS", "24")))
+            max_tokens = min(max_tokens, int(os.getenv("CPU_MAX_NEW_TOKENS", "128")))  # 24 cut code gen short on CPU
 
         with torch.inference_mode():
             outputs = model.generate(
@@ -202,7 +205,7 @@ def _local_generate(
 def _cloud_generate(prompt: str, task_type: str = "default"):
     endpoint = os.getenv("CLOUD_LLM_ENDPOINT")
     api_key = os.getenv("CLOUD_LLM_API_KEY")
-    model_name = os.getenv("CLOUD_LLM_MODEL", "gpt-4o-mini")
+    model_name = os.getenv("CLOUD_LLM_MODEL", "local-fallback")
 
     if not endpoint:
         return {

@@ -117,9 +117,13 @@ def solve_math(prompt: str) -> tuple[str, float]:
     if pct:
         total = float(pct.group(1))
         remaining = total
-        for m in re.finditer(r"(?:sells?|removes?|loses?|gives? away|discards?)\s+(\d+(?:\.\d+)?)\s*%", prompt, re.I):
+        # Active voice: "sells/removes/loses N%"
+        for m in re.finditer(r"(?:sells?|removes?|loses?|gives? away|discards?|ships?|sends?|delivers?|returns?)\s+(\d+(?:\.\d+)?)\s*%", prompt, re.I):
             remaining -= total * float(m.group(1)) / 100
-        for m in re.finditer(r"(?:sells?|removes?|loses?|gives? away|discards?)\s+(\d+(?:\.\d+)?)\s+more\b", prompt, re.I):
+        # Passive voice: "20% are shipped/sold/removed"
+        for m in re.finditer(r"(\d+(?:\.\d+)?)\s*%\s+(?:are|is|were|was)\s+(?:sold|shipped|sent|delivered|removed|lost|discarded|returned|given away|used|spent)", prompt, re.I):
+            remaining -= total * float(m.group(1)) / 100
+        for m in re.finditer(r"(?:sells?|removes?|loses?|gives? away|discards?|ships?|sends?|delivers?|returns?)\s+(\d+(?:\.\d+)?)\s+more\b", prompt, re.I):
             remaining -= float(m.group(1))
         for m in re.finditer(r"\band\s+(\d+(?:\.\d+)?)\s+(?:more|additional|extra)\b", prompt, re.I):
             remaining -= float(m.group(1))
@@ -230,6 +234,15 @@ _NAME_STOPS = {
 }
 
 
+# Known organizations without a corporate suffix (e.g. "Fireworks AI", "Bitcoin").
+# Keeps NER honest on product/org names the suffix regex can't catch.
+_KNOWN_ORGS = {
+    "fireworks ai", "openai", "anthropic", "google", "meta",
+    "microsoft", "apple", "amazon", "nvidia", "hugging face", "huggingface",
+    "bitcoin", "ethereum", "tesla", "twitter", "facebook", "instagram",
+    "linux", "pytorch", "github", "docker", "amd", "intel", "ibm", "oracle",
+}
+
 def solve_ner(prompt: str) -> tuple[str, float]:
     target = _extract_target(prompt)
     entities: dict[str, list[str]] = {"PERSON": [], "ORGANIZATION": [], "LOCATION": [], "DATE": []}
@@ -243,6 +256,18 @@ def solve_ner(prompt: str) -> tuple[str, float]:
         if v and v not in entities["ORGANIZATION"]:
             entities["ORGANIZATION"].append(v)
             org_spans.add((m.start(), m.end()))
+    # Fallback: scan for known orgs by name (longest-match wins, dedupes substrings).
+    lower_target = target.lower()
+    for org in _KNOWN_ORGS:
+        if org not in lower_target:
+            continue
+        idx = lower_target.find(org)
+        span = target[idx:idx + len(org)]
+        if any(span != e and (span in e or e in span) for e in entities["ORGANIZATION"]):
+            continue
+        if span not in entities["ORGANIZATION"]:
+            entities["ORGANIZATION"].append(span)
+            org_spans.add((idx, idx + len(org)))
     loc_spans: set[tuple[int, int]] = set()
     for m in _LOCATION_PREPS.finditer(target):
         v = m.group(1).strip()
@@ -575,9 +600,9 @@ _CONF_THRESHOLD = 0.8
 
 
 def verify_code_debug(fixed_code: str) -> bool:
-    # ponytail: runs solver-fixed code in a stripped namespace to catch
-    # logic bugs (not just syntax). max-like funcs get multi-input asserts;
-    # others only crash-detect — true logic check needs a spec we don't have.
+    # Runs solver-fixed code in a stripped namespace to catch logic bugs
+    # (not just syntax). max-like funcs get multi-input asserts; others only
+    # crash-detect - a true logic check needs a spec we don't have.
     # Safe builtins only: blocks open/eval/exec/import, keeps math helpers.
     if not fixed_code.strip():
         return True

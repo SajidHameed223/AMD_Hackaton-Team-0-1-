@@ -19,13 +19,12 @@ COPY ml/ ml/
 COPY solve.py .
 
 # ---------- local model weights (optional) ----------
-# Pre-download weights with:  python download_model.py
 # If models/ is empty the image stays small (~1.5 GB) and T1 fails
 # gracefully at runtime, falling back to T2 (cloud).
 COPY models/ models/
 
 # Point local/model.py at the bundled weights (if present)
-ENV MODEL_NAME=/app/models/gemma-2b-it
+ENV MODEL_NAME=/app/models/Qwen2.5-1.5B-Instruct
 
 # ---------- runtime ----------
 # Grading harness injects FIREWORKS_API_KEY, FIREWORKS_BASE_URL,

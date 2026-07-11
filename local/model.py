@@ -24,9 +24,7 @@ class ModelManager:
 
     def __init__(self):
         self.loaded_models = {}  # model_id → (model, tokenizer)
-        self.default_model_id = os.getenv(
-            "MODEL_NAME", "google/gemma-2-9b-it"  # Changed from gemma-4-9b-it (doesn't exist)
-        )
+        self.default_model_id = os.getenv("MODEL_NAME")  # None if not set
         self._print_system_info()
 
     @staticmethod
@@ -99,7 +97,7 @@ class ModelManager:
         use_cuda = torch.cuda.is_available()
         use_4bit = self._env_flag("LOCAL_USE_4BIT", default=True)
 
-        # Prefer 4-bit quantized CUDA loading for consumer GPUs (e.g., 12GB VRAM).
+        # Prefer 4-bit quantized loading for CUDA only (CPU 4-bit is too slow)
         if use_cuda and use_4bit:
             try:
                 from transformers import BitsAndBytesConfig
@@ -122,12 +120,12 @@ class ModelManager:
             except Exception as e:
                 print(f"[Model] 4-bit load unavailable, falling back: {type(e).__name__}: {e}")
 
-        # Fallback path: keep GPU first, CPU only if CUDA is unavailable.
+        # Fallback path: standard loading (float16 on CUDA, float32 on CPU)
         if model is None:
             model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 device_map=("auto" if use_cuda else "cpu"),
-                torch_dtype=(torch.float16 if use_cuda else torch.float32),
+                torch_dtype=torch.float16,  # fp16 on CPU too - fp32 OOMs the 4GB grader
                 low_cpu_mem_usage=True,
                 trust_remote_code=True,
             )
@@ -191,7 +189,9 @@ _manager = ModelManager()
 
 
 def get_model_and_tokenizer(model_id: str = None) -> Tuple:
-    """Get model and tokenizer (may load if not cached)."""
+    """Get model and tokenizer (may load if not cached). Returns (None, None) if no MODEL_NAME set."""
+    if model_id is None and not os.getenv("MODEL_NAME"):
+        return None, None
     return _manager.get_model_and_tokenizer(model_id)
 
 

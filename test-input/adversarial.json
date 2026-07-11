@@ -1,0 +1,10 @@
+[
+  {"task_id": "adv1", "prompt": "Classify the sentiment of this review: The service was adequate, nothing special but not terrible either. It was just okay."},
+  {"task_id": "adv2", "prompt": "What is the capital of Burkina Faso and what body of water is it near?"},
+  {"task_id": "adv3", "prompt": "A factory produces 1000 widgets. 15% are defective. 50 more are damaged during shipping. How many good widgets remain?"},
+  {"task_id": "adv4", "prompt": "Summarize in exactly one sentence: Quantum entanglement is a physical phenomenon that occurs when pairs or groups of particles are generated, interact, or share spatial proximity in a way such that the quantum state of each particle cannot be described independently of the state of the others, even when the particles are separated by a large distance. This counterintuitive property was famously called spooky action at a distance by Einstein. It is a fundamental aspect of quantum mechanics and has applications in quantum computing, quantum cryptography, and quantum teleportation."},
+  {"task_id": "adv5", "prompt": "Extract named entities: Dr. Amara Okonkwo presented her research on CRISPR gene editing at the International Genomics Conference in Cape Town on June 15, 2023."},
+  {"task_id": "adv6", "prompt": "Debug this code: def find_second_max(arr): arr.sort(); return arr[-2]"},
+  {"task_id": "adv7", "prompt": "Five friends - Alice, Bob, Carol, Dave, Eve - each have a different favorite color: red, blue, green, yellow, purple. Alice doesn't like red or blue. Bob's favorite is green. Carol doesn't like yellow. Dave likes purple. Who likes red?"},
+  {"task_id": "adv8", "prompt": "Write a Python function that finds the longest common prefix among a list of strings."}
+]
