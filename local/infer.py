@@ -1,8 +1,6 @@
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 
 import torch
 
@@ -202,117 +200,13 @@ def _local_generate(
         raise RuntimeError(f"Inference failed: {str(e)}") from e
 
 
-def _cloud_generate(prompt: str, task_type: str = "default"):
-    endpoint = os.getenv("CLOUD_LLM_ENDPOINT")
-    api_key = os.getenv("CLOUD_LLM_API_KEY")
-    model_name = os.getenv("CLOUD_LLM_MODEL", "local-fallback")
-
-    if not endpoint:
-        return {
-            "configured": False,
-            "error": "Missing CLOUD_LLM_ENDPOINT",
-            "model": model_name,
-        }
-
-    optimized_prompt = compress_prompt(prompt, task_type, speed_mode=True)
-    payload = {
-        "model": model_name,
-        "messages": _build_messages(optimized_prompt),
-        "temperature": 0,
-        "max_tokens": min(get_profile(task_type)["max_tokens"], 96),
-    }
-
-    req = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Content-Type": "application/json",
-            **({"Authorization": f"Bearer {api_key}"} if api_key else {}),
-        },
-        method="POST",
-    )
-
-    start = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=30) as response:
-            body = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        return {
-            "configured": True,
-            "model": model_name,
-            "error": f"HTTP {e.code}",
-        }
-    except Exception as e:
-        return {
-            "configured": True,
-            "model": model_name,
-            "error": str(e),
-        }
-
-    latency_ms = int((time.time() - start) * 1000)
-
-    answer = (
-        body.get("choices", [{}])[0]
-        .get("message", {})
-        .get("content", "")
-        .strip()
-    )
-
-    usage = body.get("usage", {})
-    completion_tokens = usage.get("completion_tokens", _count_tokens(answer))
-    prompt_tokens = usage.get("prompt_tokens", _count_tokens(optimized_prompt))
-    total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
-    tokens_per_second = round((completion_tokens / max(latency_ms, 1)) * 1000, 2)
-
-    result = {
-        "configured": True,
-        "model": model_name,
-        "answer": answer,
-        "latency_ms": latency_ms,
-        "token_efficiency": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": total_tokens,
-            "tokens_per_second": tokens_per_second,
-            "ms_per_output_token": round(latency_ms / max(completion_tokens, 1), 2),
-        },
-    }
-
-    log_event(
-        {
-            "event": "cloud_generate",
-            "task_type": task_type,
-            "latency_ms": latency_ms,
-            "model": model_name,
-            **result["token_efficiency"],
-        }
-    )
-
-    return result
-
-
 def compare_local_vs_cloud(prompt: str, task_type: str = "default", model_id: str = None):
-    """Phase 4A: Supports model_id parameter."""
+    """Legacy benchmark shape retained without arbitrary external inference."""
     local = _local_generate(
         prompt, task_type=task_type, speed_mode=True, model_id=model_id
     )
-    cloud = _cloud_generate(prompt, task_type=task_type)
-
-    comparison = {
-        "local_ms": local["latency_ms"],
-        "cloud_ms": cloud.get("latency_ms"),
-        "faster": "local",
-        "delta_ms": None,
-    }
-
-    if cloud.get("latency_ms") is not None:
-        local_ms = local["latency_ms"]
-        cloud_ms = cloud["latency_ms"]
-        comparison["delta_ms"] = abs(local_ms - cloud_ms)
-        comparison["faster"] = "local" if local_ms <= cloud_ms else "cloud"
-    elif cloud.get("error"):
-        comparison["faster"] = "local (cloud unavailable)"
-
+    cloud = {"configured": False, "error": "Arbitrary external inference is disabled; use the approved Fireworks router."}
+    comparison = {"local_ms": local["latency_ms"], "cloud_ms": None, "faster": "local", "delta_ms": None}
     log_event({"event": "compare_local_cloud", **comparison})
     return {"local": local, "cloud": cloud, "comparison": comparison}
 

@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import ast
-import json
 import math
 import os
 import subprocess
 import sys
 import tempfile
-import urllib.parse
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -163,61 +160,12 @@ def execute_python(source: str) -> dict[str, Any]:
     return {"ok": completed.returncode == 0, "error": None if completed.returncode == 0 else f"exit code {completed.returncode}", "stdout": stdout, "stderr": stderr}
 
 
-def _topic_results(topics: list[Any]) -> list[dict[str, str]]:
-    results: list[dict[str, str]] = []
-    for topic in topics:
-        if not isinstance(topic, dict):
-            continue
-        if isinstance(topic.get("Topics"), list):
-            results.extend(_topic_results(topic["Topics"]))
-        elif topic.get("Text"):
-            results.append({"title": str(topic["Text"])[:160], "snippet": str(topic["Text"])[:700], "url": str(topic.get("FirstURL", ""))[:500]})
-    return results
-
-
-def web_search(query: str) -> dict[str, Any]:
-    """Get bounded JSON search evidence; disabled unless explicitly configured."""
-
-    query = str(query).strip()[:300]
-    if os.getenv("LOCAL_WEB_SEARCH_ENABLED", "0").lower() not in {"1", "true", "yes", "on"}:
-        return {"available": False, "query": query, "results": [], "error": "web search disabled"}
-    if not query:
-        return {"available": False, "query": query, "results": [], "error": "empty query"}
-    endpoint = os.getenv("LOCAL_WEB_SEARCH_ENDPOINT", "https://api.duckduckgo.com/?format=json&no_html=1&skip_disambig=1")
-    separator = "&" if "?" in endpoint else "?"
-    url = f"{endpoint}{separator}{urllib.parse.urlencode({'q': query})}"
-    headers = {"Accept": "application/json", "User-Agent": "Team-O1-Track1/1.0"}
-    if os.getenv("LOCAL_WEB_SEARCH_API_KEY"):
-        headers["Authorization"] = f"Bearer {os.environ['LOCAL_WEB_SEARCH_API_KEY']}"
-    timeout = max(1.0, min(float(os.getenv("LOCAL_WEB_SEARCH_TIMEOUT_S", "4")), 10.0))
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
-            payload = json.loads(response.read(256_000).decode("utf-8"))
-    except Exception as exc:
-        return {"available": False, "query": query, "results": [], "error": f"{type(exc).__name__}: {str(exc)[:160]}"}
-
-    results: list[dict[str, str]] = []
-    if isinstance(payload, dict) and payload.get("AbstractText"):
-        results.append({"title": str(payload.get("Heading", "Answer"))[:160], "snippet": str(payload["AbstractText"])[:700], "url": str(payload.get("AbstractURL", ""))[:500]})
-    if isinstance(payload, dict) and isinstance(payload.get("RelatedTopics"), list):
-        results.extend(_topic_results(payload["RelatedTopics"]))
-    if isinstance(payload, dict) and isinstance(payload.get("results") or payload.get("items"), list):
-        for item in payload.get("results") or payload.get("items"):
-            if isinstance(item, dict):
-                results.append({"title": str(item.get("title", item.get("name", "Result")))[:160], "snippet": str(item.get("snippet", item.get("description", item.get("text", ""))))[:700], "url": str(item.get("url", item.get("link", "")))[:500]})
-    limit = max(1, min(int(os.getenv("LOCAL_WEB_SEARCH_RESULTS", "3")), 5))
-    return {"available": bool(results), "query": query, "results": results[:limit], "error": None}
-
-
 def execute_tool(request: dict[str, Any]) -> dict[str, Any]:
     name = str(request.get("name", "")).strip().lower()
     tool_input = str(request.get("input", request.get("query", "")))
     try:
         if name == "calculator":
             return {"tool": name, "ok": True, "input": tool_input[:240], "result": safe_calculate(tool_input)}
-        if name == "web_search":
-            result = web_search(tool_input)
-            return {"tool": name, "ok": result["available"], **result}
         if name == "python_syntax":
             result = check_python_syntax(tool_input)
             return {"tool": name, "ok": result["valid"], "result": result}
