@@ -130,3 +130,9 @@ See `.env.example` for the full list. Key ones:
 | `ENABLE_T2` | `1` | Routes non-deterministic tasks to the Fireworks proxy |
 | `FIREWORKS_BASE_URL` | (empty) | Injected by harness at grade time |
 | `ALLOWED_MODELS` | (empty) | Comma-separated permitted model IDs |
+
+## Screens of Project
+
+## Chat Screen
+
+![Chat screen](assests/chat%20screen.png)
