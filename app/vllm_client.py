@@ -7,7 +7,7 @@ import urllib.request
 
 class VLLMClient:
     def __init__(self):
-        self.base_url = os.getenv("VLLM_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+        self.base_url = os.getenv("VLLM_BASE_URL", "http://165.245.131.71:8000").rstrip("/")
         self.api_key = os.getenv("VLLM_API_KEY", "")
         self.model_map = {
             "small": os.getenv("GEMMA_SMALL_MODEL", "gemma-4-small"),

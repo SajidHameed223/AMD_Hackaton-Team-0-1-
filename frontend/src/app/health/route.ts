@@ -1,7 +1,7 @@
 const FASTAPI_BASE = (
   process.env.FASTAPI_BACKEND_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://127.0.0.1:8000"
+  "http://165.245.131.71:8000"
 ).replace(/\/$/, "");
 
 export async function GET() {

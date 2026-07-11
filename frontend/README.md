@@ -18,10 +18,10 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 For database-backed chat history, run the FastAPI backend with `DATABASE_URL`
 configured and migrations applied from the repository root. The frontend uses
-`NEXT_PUBLIC_API_URL` when the API is not on `http://localhost:8000`:
+`NEXT_PUBLIC_API_URL` when the API is not on `http://165.245.131.71:8000`:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+NEXT_PUBLIC_API_URL=http://165.245.131.71:8000 npm run dev
 ```
 
 If the backend or Postgres is not available, the history rail falls back to a

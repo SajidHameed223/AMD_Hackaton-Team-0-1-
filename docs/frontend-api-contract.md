@@ -23,7 +23,7 @@ python -m uvicorn app.main:app --reload
 Frontend:
 
 ```bash
-NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+NEXT_PUBLIC_API_URL=http://165.245.131.71:8000 npm run dev
 ```
 
 ## Endpoint Template
