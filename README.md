@@ -142,9 +142,11 @@ existing fallback if the local validator cannot accept an answer.
 
 The default local deadline is 26 seconds, preserving headroom inside Track 1's
 30-second request limit for routing, output serialization, and a possible T2
-handoff. Analyzer and validator responses are deliberately compact; code tasks
-receive a larger answer/repair allowance than other categories. A deadline or
-exhausted local repair cycle returns control to the existing T2 path.
+handoff. Category profiles determine answer length; analyzer and validator
+ceilings are intentionally generous enough for structured plans and correction
+reports. The deadline, rather than premature truncation, controls runtime. A
+deadline or exhausted local repair cycle returns control to the existing T2
+path.
 
 The structured analysis can request only calculator, optional web grounding,
 UTC time, Python syntax checking, or restricted Python execution. Web grounding
