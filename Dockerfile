@@ -1,31 +1,32 @@
-FROM python:3.12-slim
-
-ENV OLLAMA_HOST=127.0.0.1:11434
-ENV OLLAMA_MODELS=/root/.ollama/models
-ENV LOCAL_MODEL=gemma3:1b-it-qat
-ENV OLLAMA_NUM_PARALLEL=1
-ENV OLLAMA_MAX_LOADED_MODELS=1
-ENV OLLAMA_FLASH_ATTENTION=1
+# syntax=docker/dockerfile:1
+FROM --platform=linux/amd64 python:3.12-slim
 
 WORKDIR /app
 
-# Install Ollama at build time (pulls the binary, not the model)
-RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates zstd && \
-    curl -fsSL https://ollama.com/install.sh | sh && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# ---------- dependencies ----------
+COPY requirements.txt .
 
-# Pull the model at build time (cached in the image layer)
-RUN ollama serve & \
-    sleep 3 && \
-    ollama pull gemma3:1b-it-qat && \
-    kill %1 2>/dev/null || true
+# Install CPU-only PyTorch first (saves ~1.5 GB vs CUDA variant),
+# then the remaining deps. --no-cache-dir keeps the layer small.
+RUN pip install --no-cache-dir \
+        torch==2.12.1 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy agent code
-COPY agent.py /app/agent.py
-COPY local_engine/ /app/local_engine/
-COPY entrypoint.sh /app/entrypoint.sh
-COPY tools.json /app/tools.json
+# ---------- application code ----------
+COPY app/  app/
+COPY local/ local/
+COPY ml/ ml/
+COPY solve.py .
 
-RUN chmod +x /app/entrypoint.sh
+# ---------- local model weights (optional) ----------
+# Pre-download weights with: python download_model.py
+# If models/ is empty the image stays small and T1 fails gracefully at
+# runtime, falling back to T2 (cloud).
+COPY models/ models/
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Point local/model.py at the bundled weights (if present).
+ENV MODEL_NAME=/app/models/gemma-2b-it
+
+# The grading harness injects FIREWORKS_API_KEY, FIREWORKS_BASE_URL, and
+# ALLOWED_MODELS at runtime; solve.py reads them from the environment.
+ENTRYPOINT ["python", "solve.py"]

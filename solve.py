@@ -93,7 +93,7 @@ def _load_ml_router():
 def _try_local_infer(prompt: str, category: str) -> str | None:
     """Attempt T1 local model inference.  Returns answer or None on failure."""
     try:
-        from local.infer import generate  # lazy — triggers model load
+        from local.t1_inference import generate  # lazy — triggers model load
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)
         return result.get("answer", "")
     except Exception as exc:

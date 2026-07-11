@@ -92,6 +92,7 @@ O1-AMD-Hackathon/
 │   └── vllm_client.py       # Reference VLLM client (not in graded path)
 │
 ├── local/                   # Local LLM inference (T1)
+│   ├── t1_inference.py      # solve.py-facing T1 tuning surface
 │   ├── infer.py             # generate() — prompt build → model.generate()
 │   ├── model.py             # ModelManager — loads /app/models weights on CPU
 │   └── profiles.py          # Per-category inference profiles
@@ -112,8 +113,6 @@ O1-AMD-Hackathon/
 ├── docker-test-input/       # Docker run inputs
 ├── docker-test-output/      # Docker run outputs
 │
-├── local_engine/            # Alternate adaptive local engine (Ollama path)
-├── agent.py / entrypoint.sh # Ollama-based runtime (Dockerfile, not graded path)
 └── AGENTS.md                # Contributor/agent context for the repo
 ```
 
