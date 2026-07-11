@@ -151,10 +151,11 @@ control to the existing T2 path.
 
 The structured analysis can request only calculator, optional web grounding,
 UTC time, Python syntax checking, or restricted Python execution. Web grounding
-is disabled by default because the grading network is not guaranteed. Successful
-grounded current/factual answers must include source URLs. Audit logs store only
-safe metadata such as prompt hashes, stage timings, validation scores, and tool
-status; they do not store prompts, answers, retrieved text, or credentials.
+is disabled by default because the grading network is not guaranteed. Retrieved
+evidence improves answer quality but does not force citations into the final
+answer. Audit logs store only safe metadata such as prompt hashes, stage timings,
+validation scores, and tool status; they do not store prompts, answers,
+retrieved text, or credentials.
 
 Tune the bounded stage and tool limits through the `LOCAL_T1_*`,
 `LOCAL_WEB_SEARCH_*`, and `LOCAL_PYTHON_*` variables in `.env.example`.

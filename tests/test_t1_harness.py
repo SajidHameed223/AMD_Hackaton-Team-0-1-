@@ -104,6 +104,17 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(result["available"])
         self.assertEqual(result["error"], "web search disabled")
 
+    def test_grounded_answer_does_not_require_a_public_url(self):
+        from local.t1_rubric import deterministic_checks
+
+        result = deterministic_checks(
+            "What is the current weather?",
+            "It is currently clear.",
+            "factual",
+            [{"tool": "web_search", "ok": True, "results": [{"url": "https://example.test"}]}],
+        )
+        self.assertTrue(result["pass"])
+
 
 class SolveBoundaryTests(unittest.TestCase):
     def test_empty_local_answer_is_t2_eligible(self):
