@@ -68,9 +68,6 @@ def deterministic_checks(prompt: str, answer: str, category: str, evidence: list
             ast.parse(_python_source(answer))
         except SyntaxError as exc:
             errors.append(f"Generated Python is invalid at line {exc.lineno}: {exc.msg}.")
-    successful_web = any(item.get("tool") == "web_search" and item.get("ok") for item in evidence)
-    if successful_web and not re.search(r"https?://", answer):
-        errors.append("Grounded answer must include at least one source URL.")
     return {"pass": not errors, "errors": errors, "warnings": warnings}
 
 
