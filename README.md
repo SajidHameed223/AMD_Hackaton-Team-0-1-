@@ -37,8 +37,8 @@ task to the cheapest tier that can answer it, and writes one result per task.
       │        · factual · math · sentiment · summarization
       │        · NER · code_debug · logical · code_gen
       │
-      ├─ T1  local/infer.py · local LLM inference (0 Fireworks tokens)
-      │        · bundled model in models/ (e.g. Qwen2.5-1.5B-Instruct)
+      ├─ T1  local/ollama_t1.py · local LLM inference via Ollama (0 Fireworks tokens)
+      │        · bundled model: gemma3:1b-it-qat (pulled at build time)
       │
       └─ T2  app/fireworks_client.py · cloud fallback (costs tokens)
                · only used when T0/T1 cannot answer
@@ -77,7 +77,7 @@ dispatching:
 ```
 O1-AMD-Hackathon/
 ├── solve.py                 # Container entrypoint (graded artifact)
-├── Dockerfile.track1        # GRADED submission image (CPU torch + app + local + ml)
+├── Dockerfile.gemma        # GRADED submission image (Ollama + gemma3:1b + app + local + ml)
 ├── Dockerfile               # Alternate Ollama-based local runtime (demo chat path)
 ├── Dockerfile.e2b           # Experimental Gemma 4 E2B variant
 ├── requirements.txt         # Pinned Python dependencies
@@ -93,15 +93,12 @@ O1-AMD-Hackathon/
 │
 ├── local/                   # Local LLM inference (T1)
 │   ├── t1_inference.py      # solve.py-facing T1 tuning surface
-│   ├── infer.py             # generate() — prompt build → model.generate()
-│   ├── model.py             # ModelManager — loads /app/models weights on CPU
-│   └── profiles.py          # Per-category inference profiles
+│   └── ollama_t1.py         # generate() — Ollama-backed single-pass inference (gemma3:1b)
 │
 ├── ml/                      # Optional ML complexity router (predicts hard/easy)
-│   └── router_model.pkl     # Trained artifact (loaded if present)
+│   └── router_model.pkl      # Trained artifact (loaded if present)
 │
-├── models/                  # Bundled local model weights (gitignored, large)
-│   └── Qwen2.5-1.5B-Instruct/
+├── models/                  # (legacy) bundled weights dir — now unused; gemma pulled at build
 │
 ├── scripts/
 │   └── verify_t0.py         # T0 correctness gate (CI / pre-commit)
@@ -120,13 +117,15 @@ O1-AMD-Hackathon/
 
 ## Local model (T1)
 
-The container bundles local model weights under `models/` so T1 can answer
-open-ended tasks without any cloud call. The model is loaded on CPU by
-`local/model.py` and selected via the `MODEL_NAME` environment variable.
+The container runs a local LLM through Ollama (`local/ollama_t1.py`) so T1 can
+answer open-ended tasks without any cloud call. The default model is
+`gemma3:1b-it-qat`, pulled into the image at build time and served by the
+in-container Ollama daemon (`entrypoint_gemma.sh`). It is selected via the
+`LOCAL_MODEL` environment variable.
 
-If `models/` is empty (or `MODEL_NAME` is unset), T1 fails fast and the
-pipeline falls through to T2 — the container still produces complete output and
-exits `0`.
+If the local backend is disabled (`LOCAL_T1_BACKEND=none`) or the model is
+unavailable, T1 fails fast and the pipeline falls through to T2 — the
+container still produces complete output and exits `0`.
 
 > Note: large weight files are excluded from git (see `.gitignore`). They are
 > present in the built image, not in the source repo.
@@ -182,14 +181,14 @@ At evaluation time, the grading harness injects these. **Do not hardcode them.**
 ## Build & run (graded image)
 
 ```bash
-# Build the graded submission image
-docker build -f Dockerfile.track1 -t team-o1-track1 .
+# Pull the graded submission image (public on Docker Hub)
+docker pull stealthed/o1-track1:latest
 
-# Run it against a task file (mount input/output)
-docker run --rm \
-  -v "$PWD/test-input:/input:ro" \
+# Run against a task file (mount input/output) under grader limits
+docker run --rm --memory=4g --cpus=2 \
+  -v "$PWD/test-input/tasks.json:/input/tasks.json:ro" \
   -v "$PWD/test-output:/output" \
-  team-o1-track1
+  stealthed/o1-track1:latest
 
 # Inspect the result
 cat test-output/results.json
@@ -205,9 +204,9 @@ Run the image under the exact grading limits to confirm the harness contract:
 
 ```bash
 docker run --rm --memory=4g --cpus=2 \
-  -v "$PWD/grader-test-input:/input:ro" \
+  -v "$PWD/grader-test-input/tasks.json:/input/tasks.json:ro" \
   -v "$PWD/grader-test-output:/output" \
-  team-o1-track1
+  stealthed/o1-track1:latest
 ```
 
 Expect: every task answered where a tier succeeded, valid JSON, exit code `0`.
@@ -230,7 +229,7 @@ so a silent solver bug fails loudly instead of shipping.
 
 | Area | Owner(s) |
 |------|----------|
-| Routing + container (`app/router.py`, `solve.py`, `Dockerfile.track1`) | Jae, Sajid |
+| Routing + container (`app/router.py`, `solve.py`, `Dockerfile.gemma`) | Jae, Sajid |
 | Local model serving (`local/`) | CringeKid, Science_AJ |
 | Cloud/Fireworks client (`app/fireworks_client.py`) | Unknown Person |
 | FastAPI integration (`app/main.py`) | Hero |
