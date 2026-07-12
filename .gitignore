@@ -21,4 +21,5 @@ logs.jsonl
 request_log.jsonl
 *.jsonl
 test.html
-dashboard.html
+dashboard.htmlt1bench-out/
+meeting-out/

@@ -31,11 +31,11 @@ def generate(prompt, task_type="default", speed_mode=True, model_id=None):
 
     def call(system: str, user: str, max_tokens: int) -> str:
         if system == ANALYZER_SYSTEM:
-            cap, timeout = 24, 4
+            cap, timeout = 48, 12
         elif system == JUDGE_SYSTEM:
-            cap, timeout = 48, 6
+            cap, timeout = 64, 15
         else:
-            cap, timeout = (160, 18) if category in _CODE else (96, 16)
+            cap, timeout = (200, 26) if category in _CODE else (160, 26)
             if category in _CODE:
                 system += _CODE_RULE
 

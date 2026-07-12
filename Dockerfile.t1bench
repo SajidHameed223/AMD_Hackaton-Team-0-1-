@@ -1,0 +1,17 @@
+FROM gemma3-1b-qat-track1:latest
+COPY solve.py /app/solve.py
+COPY app/ /app/app/
+COPY local/ /app/local/
+COPY ml/ /app/ml/
+COPY benchmark_tasks.json /app/benchmark_tasks.json
+COPY benchmark_t1.py /app/benchmark_t1.py
+COPY entrypoint_t1bench.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+RUN pip install --no-cache-dir openai
+# bake gemma3:1b so T1 can run offline (matches graded image)
+RUN ollama serve >/tmp/ollama.log 2>&1 & sleep 8 && ollama pull gemma3:1b-it-qat; pkill -f "ollama serve" || true
+ENV LOCAL_T1_BACKEND=ollama
+ENV LOCAL_MODEL=gemma3:1b-it-qat
+ENV BENCH_TASKS=/app/benchmark_tasks.json
+ENV BENCH_OUT=/output/results.json
+ENTRYPOINT ["/app/entrypoint.sh"]
