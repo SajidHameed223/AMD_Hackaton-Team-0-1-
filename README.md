@@ -79,7 +79,7 @@ O1-AMD-Hackathon/
 ├── solve.py                 # Container entrypoint (graded artifact)
 ├── Dockerfile.gemma        # GRADED submission image (Ollama + gemma3:1b + app + local + ml)
 ├── Dockerfile               # Alternate Ollama-based local runtime (demo chat path)
-├── Dockerfile.e2b           # Experimental Gemma 4 E2B variant
+├── Dockerfile.track1        # Experimental Qwen/Torch variant (not the graded image)
 ├── requirements.txt         # Pinned Python dependencies
 ├── .dockerignore            # Keeps the build context lean
 │
@@ -105,8 +105,6 @@ O1-AMD-Hackathon/
 │
 ├── test-input/              # Practice task set (16 tasks, 8 categories × 2)
 ├── test-output/             # Local run outputs
-├── grader-test-input/       # Mirror of the practice set for grader simulation
-├── grader-test-output/      # Grader simulation outputs
 ├── docker-test-input/       # Docker run inputs
 ├── docker-test-output/      # Docker run outputs
 │
@@ -204,8 +202,8 @@ Run the image under the exact grading limits to confirm the harness contract:
 
 ```bash
 docker run --rm --memory=4g --cpus=2 \
-  -v "$PWD/grader-test-input/tasks.json:/input/tasks.json:ro" \
-  -v "$PWD/grader-test-output:/output" \
+  -v "$PWD/test-input/tasks.json:/input/tasks.json:ro" \
+  -v "$PWD/test-output:/output" \
   stealthed/o1-track1:latest
 ```
 
