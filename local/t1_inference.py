@@ -248,7 +248,12 @@ def run_cycle(prompt: str, task_type: str, call: ModelCall) -> dict[str, Any]:
         answer = _stage(state, "answer", call, ANSWER_SYSTEM, _answer_prompt(state, rubric), _answer_cap(state.category, "LOCAL_T1_ANSWER_MAX_TOKENS", 384))
 
         deterministic = deterministic_checks(prompt, answer, state.category, state.evidence)
-        if state.plan["trivial"] and deterministic["pass"]:
+        code_category = state.category in {"code", "code_debug", "code_gen"}
+        if code_category:
+            if not deterministic["pass"]:
+                raise HarnessFailure("deterministic code checks rejected the local answer: " + "; ".join(deterministic["errors"][:3]))
+            state.validation = {"pass": True, "score": 100, "errors": [], "required_fixes": [], "warnings": [], "judge_available": False, "skipped_for_code": True}
+        elif state.plan["trivial"] and deterministic["pass"]:
             state.validation = {"pass": True, "score": 100, "errors": [], "required_fixes": [], "warnings": [], "judge_available": False, "skipped_for_trivial": True}
         else:
             validation = _validate(state, call, rubric, answer)

@@ -114,6 +114,12 @@ class HarnessCycleTests(unittest.TestCase):
         self.assertIn("Category: code_debug", model.calls[1][1])
         self.assertIn("actual defect", model.calls[1][1])
 
+    def test_code_categories_skip_llm_validator_after_deterministic_check(self):
+        model = ScriptedModel([PLAN, "def f():\n    return 1"])
+        result = run_cycle("Write a Python function that returns 1.", "code_gen", model)
+        self.assertEqual(len(model.calls), 2)
+        self.assertFalse(result["harness"]["judge_available"])
+
     def test_audit_log_does_not_contain_prompt_or_answer(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "audit.jsonl"
