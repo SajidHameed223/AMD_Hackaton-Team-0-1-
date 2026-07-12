@@ -94,7 +94,7 @@ def _try_local_infer(prompt: str, category: str) -> str | None:
     """Attempt T1 local model inference.  Returns answer or None on failure."""
     try:
         if os.environ.get("LOCAL_T1_BACKEND") == "ollama":
-            from local.ollama_t1 import generate  # ponytail: ollama http, single-pass, no transformers load
+            from local.ollama_t1 import generate  # ponytail: compact agent loop over Ollama HTTP
         else:
             from local.t1_inference import generate  # lazy — triggers model load
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)

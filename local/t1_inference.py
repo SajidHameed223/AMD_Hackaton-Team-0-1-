@@ -174,7 +174,7 @@ def _normalise_plan(raw: str, prompt: str, category: str) -> dict[str, Any]:
     return result
 
 
-ANALYZER_SYSTEM = """Return ONLY compact JSON in this exact shape: {\"tools\":[{\"name\":\"calculator|python_syntax|python_execute|current_time\",\"input\":\"...\"}]}. Request at most three allow-listed tools; return an empty tools list when none is needed. Do not include reasoning or any other fields."""
+ANALYZER_SYSTEM = """Return only {\"tools\":[]}. Add a tool only if needed: calculator, python_syntax, python_execute, or current_time. Tool shape: {\"name\":\"...\",\"input\":\"...\"}. No reasoning."""
 ANSWER_SYSTEM = """Produce only the final answer in English. Do not mention planning, tools, validators, or model internals. Follow the user task and output requirement exactly; use tool evidence only as reference."""
 JUDGE_SYSTEM = """Return ONLY compact JSON with arrays (never null): {\"pass\":true|false,\"score\":0-100,\"critical_errors\":[],\"improvements\":[],\"required_fixes\":[],\"confidence\":0-1}. Reject only a specific factual, arithmetic, logical, executable-code, completeness, or explicit-format error. Do not reject style or optional detail. Do not rewrite the answer."""
 
@@ -192,7 +192,7 @@ def _stage(state: CycleState, name: str, call: ModelCall, system: str, user: str
 
 
 def _analyzer_prompt(prompt: str, category: str) -> str:
-    return f"Category: {category}\nTask: {prompt}\nReturn only the requested tools JSON."
+    return f"{category}: {prompt}"
 
 
 def _answer_prompt(state: CycleState, rubric: dict[str, Any], previous_answer: str | None = None, fixes: list[str] | None = None) -> str:
