@@ -45,6 +45,9 @@ router = APIRouter()
     },
 )
 def chat(payload: ChatRequest) -> ChatResponse:
+    forwarded = _forward_to_chat_backend(payload)
+    if forwarded is not None:
+        return forwarded
     return ChatResponse(**answer_chat(payload.message))
 
 
