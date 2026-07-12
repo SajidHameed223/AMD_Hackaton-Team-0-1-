@@ -99,19 +99,21 @@ def parse_verdict(raw: str) -> dict[str, Any] | None:
         score = max(0, min(100, int(float(parsed.get("score", 0)))))
     except (TypeError, ValueError):
         score = 0
+    def as_list(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        return value if isinstance(value, list) else [value]
+
     legacy_errors = parsed.get("errors", [])
-    critical_errors = parsed.get("critical_errors", legacy_errors)
-    improvements = parsed.get("improvements", parsed.get("warnings", []))
-    fixes = parsed.get("required_fixes", [])
-    critical_errors = critical_errors if isinstance(critical_errors, list) else [critical_errors]
-    improvements = improvements if isinstance(improvements, list) else [improvements]
-    fixes = fixes if isinstance(fixes, list) else [fixes]
+    critical_errors = as_list(parsed.get("critical_errors", legacy_errors))
+    improvements = as_list(parsed.get("improvements", parsed.get("warnings", [])))
+    fixes = as_list(parsed.get("required_fixes", []))
     return {
         "pass": bool(parsed.get("pass", False)),
         "score": score,
-        "critical_errors": [str(item)[:300] for item in critical_errors[:8] if str(item).strip()],
-        "improvements": [str(item)[:300] for item in improvements[:8] if str(item).strip()],
-        "required_fixes": [str(item)[:300] for item in fixes[:8]],
+        "critical_errors": [str(item)[:300] for item in critical_errors[:8] if item is not None and str(item).strip()],
+        "improvements": [str(item)[:300] for item in improvements[:8] if item is not None and str(item).strip()],
+        "required_fixes": [str(item)[:300] for item in fixes[:8] if item is not None and str(item).strip()],
         "confidence": parsed.get("confidence"),
     }
 

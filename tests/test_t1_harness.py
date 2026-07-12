@@ -65,6 +65,12 @@ class HarnessCycleTests(unittest.TestCase):
         self.assertEqual(result["answer"], "a direct answer")
         self.assertFalse(result["harness"]["judge_available"])
 
+    def test_null_verdict_fields_are_empty_not_literal_none(self):
+        verdict = parse_verdict('{"pass":true,"score":95,"critical_errors":null,"improvements":null,"required_fixes":null,"confidence":1}')
+        self.assertEqual(verdict["critical_errors"], [])
+        self.assertEqual(verdict["improvements"], [])
+        self.assertEqual(verdict["required_fixes"], [])
+
     def test_style_only_rejection_does_not_trigger_repair(self):
         model = ScriptedModel([PLAN, "A correct concise answer.", STYLE_ONLY_REJECTION])
         result = run_cycle("Answer directly", "default", model)
