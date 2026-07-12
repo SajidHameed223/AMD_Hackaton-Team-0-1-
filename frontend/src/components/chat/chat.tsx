@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type KeyboardEvent,
   type ReactNode,
 } from "react";
@@ -177,7 +178,54 @@ export function ChatInput({
   footStart?: ReactNode;
 }) {
   const [value, setValue] = useState("");
+  const [attachment, setAttachment] = useState<{ name: string; text: string } | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [readingFile, setReadingFile] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const readAttachment = useCallback(async (file: File): Promise<string> => {
+    if (file.size > 5 * 1024 * 1024) throw new Error("Files must be 5 MB or smaller.");
+    if (file.name.toLowerCase().endsWith(".txt") || file.type === "text/plain") {
+      return (await file.text()).slice(0, 50_000);
+    }
+    if (file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf") {
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      const pdfOptions = {
+        data: new Uint8Array(await file.arrayBuffer()),
+        disableWorker: true,
+      };
+      const document = await pdfjs.getDocument(
+        pdfOptions as Parameters<typeof pdfjs.getDocument>[0],
+      ).promise;
+      const pages: string[] = [];
+      for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+        const page = await document.getPage(pageNumber);
+        const content = await page.getTextContent();
+        pages.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+      }
+      return pages.join("\n\n").slice(0, 50_000);
+    }
+    throw new Error("Attach a .txt or .pdf file.");
+  }, []);
+
+  const onFileChange = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setFileError(null);
+    setReadingFile(true);
+    try {
+      const text = (await readAttachment(file)).trim();
+      if (!text) throw new Error("That file does not contain readable text.");
+      setAttachment({ name: file.name, text });
+    } catch (error) {
+      setAttachment(null);
+      setFileError(error instanceof Error ? error.message : "Could not read that file.");
+    } finally {
+      setReadingFile(false);
+    }
+  }, [readAttachment]);
 
   const autogrow = useCallback(() => {
     const el = ref.current;
@@ -188,14 +236,19 @@ export function ChatInput({
 
   const submit = useCallback(() => {
     const text = value.trim();
-    if (!text || disabled) return;
-    onSend(text);
+    if ((!text && !attachment) || disabled || readingFile) return;
+    const prompt = attachment
+      ? (text || "Please read the attached file and respond.") + "\n\n[Attached file: " + attachment.name + "]\n" + attachment.text
+      : text;
+    onSend(prompt);
     setValue("");
+    setAttachment(null);
+    setFileError(null);
     requestAnimationFrame(() => {
       const el = ref.current;
       if (el) el.style.height = "auto";
     });
-  }, [value, disabled, onSend]);
+  }, [value, attachment, disabled, onSend, readingFile]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -207,6 +260,24 @@ export function ChatInput({
   return (
     <div className="o1-input">
       <div className="o1-input__row">
+        <button
+          type="button"
+          className="o1-input__attach"
+          onClick={() => fileRef.current?.click()}
+          disabled={disabled || readingFile}
+          aria-label="Attach a text or PDF file"
+          title="Attach a .txt or .pdf file"
+        >
+          +
+        </button>
+        <input
+          ref={fileRef}
+          className="o1-sr-only"
+          type="file"
+          accept=".txt,.pdf,text/plain,application/pdf"
+          onChange={onFileChange}
+          tabIndex={-1}
+        />
         <textarea
           id="o1-chat-input"
           name="message"
@@ -237,6 +308,18 @@ export function ChatInput({
           </svg>
         </button>
       </div>
+      {(attachment || fileError || readingFile) && (
+        <div className="o1-input__attachment" role="status">
+          {readingFile && <span>Reading file…</span>}
+          {!readingFile && attachment && (
+            <>
+              <span title={attachment.name}>📎 {attachment.name}</span>
+              <button type="button" onClick={() => setAttachment(null)} aria-label="Remove attachment">Remove</button>
+            </>
+          )}
+          {!readingFile && fileError && <span className="o1-input__file-error">{fileError}</span>}
+        </div>
+      )}
       <div className="o1-input__foot">
         <div className="o1-input__status">
           {footStart ?? <span />}

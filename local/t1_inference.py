@@ -219,7 +219,7 @@ def _judge_prompt(state: CycleState, rubric: dict[str, Any], answer: str) -> str
 
 def _validate(state: CycleState, call: ModelCall, rubric: dict[str, Any], answer: str) -> dict[str, Any]:
     deterministic = deterministic_checks(state.prompt, answer, state.category, state.evidence)
-    raw = _stage(state, f"validator_{state.repairs}", call, JUDGE_SYSTEM, _judge_prompt(state, rubric, answer), _limit("LOCAL_T1_VALIDATOR_MAX_TOKENS", 256, 64, 384))
+    raw = _stage(state, f"validator_{state.repairs}", call, JUDGE_SYSTEM, _judge_prompt(state, rubric, answer), _limit("LOCAL_T1_VALIDATOR_MAX_TOKENS", 48, 48, 128))
     verdict = merge_verdict(parse_verdict(raw), deterministic)
     state.validation = verdict
     return verdict

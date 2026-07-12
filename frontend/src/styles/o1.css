@@ -895,6 +895,38 @@
 .o1-input__field::placeholder {
   color: var(--o1-ink-3);
 }
+.o1-input__attach {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--o1-border);
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--o1-surface);
+  color: var(--o1-cyan-700);
+  font-size: 22px;
+  line-height: 1;
+  transition: background var(--o1-dur-fast) var(--o1-ease-out), transform var(--o1-dur-fast) var(--o1-ease-spring);
+}
+.o1-input__attach:hover { background: var(--o1-cyan-100); transform: scale(1.05); }
+.o1-input__attach:disabled { opacity: 0.45; pointer-events: none; }
+.o1-input__attachment {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 18px 8px;
+  padding: 7px 10px;
+  border-radius: var(--o1-r-md);
+  background: var(--o1-sand-100);
+  color: var(--o1-ink-2);
+  font-size: var(--o1-text-xs);
+}
+.o1-input__attachment > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.o1-input__attachment button { margin-left: auto; color: var(--o1-cyan-700); font-weight: 700; }
+.o1-input__file-error { color: var(--o1-danger, #b42318); }
+
 .o1-input__send {
   flex: none;
   width: 40px;
