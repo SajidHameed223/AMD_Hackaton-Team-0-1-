@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - keeps standalone demo mode working
 _MATH_PAT = re.compile(
     r"\b(calcul|comput|solv|how many|how much|remain|total|sum|differ|product"
     r"|percent|fraction|\d+\s*[\+\-\*\/\%\^]\s*\d+|average|mean|median"
-    r"|ratio|proportion|what is \d|equals|result of)\b", re.I)
+    r"|ratio|proportion|what is \d|equals|result of|area|perimeter)\b", re.I)
 _SENTIMENT_PAT = re.compile(
     r"\b(sentiment|tone|feeling|emotion|positive|negative|neutral"
     r"|attitude|mood|opinion|optimistic|pessimistic|analyze the (?:sentiment|tone|feeling)"
@@ -159,6 +159,22 @@ def solve_math(prompt: str) -> tuple[str, float]:
             catch = (r1 * t0) / (r2 - r1)
             # ponytail: verify_math does float(result) -> emit bare number only
             return (str(int(catch)) if catch == int(catch) else f"{catch:.4f}".rstrip("0").rstrip(".")), 1.0
+
+    # ponytail: original price from a discounted price ("costs 40 after 20% discount")
+    disc = re.search(r"(\d+(?:\.\d+)?)\s*(?:dollars?|usd|\$)?\s*(?:after|with|for|at)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:off|discount|markdown)", prompt, re.I)
+    if disc:
+        price = float(disc.group(1)); pct = float(disc.group(2))
+        if 0 < pct < 100:
+            orig = price / (1 - pct / 100)
+            return (str(int(orig)) if orig == int(orig) else f"{orig:.2f}"), 1.0
+
+    # ponytail: rectangle area/perimeter from two dimensions ("8 cm by 5 cm")
+    dims = re.findall(r"(\d+(?:\.\d+)?)\s*(?:cm|m|ft|in|mm|km)?", prompt)
+    if re.search(r"rectangle|area|perimeter", prompt, re.I) and len(dims) >= 2:
+        a, b = float(dims[0]), float(dims[1])
+        if "perimeter" in prompt.lower():
+            return str(int(2 * (a + b)) if 2 * (a + b) == int(2 * (a + b)) else 2 * (a + b)), 1.0
+        return str(int(a * b) if a * b == int(a * b) else a * b), 1.0
 
     return "", 0.0
 
