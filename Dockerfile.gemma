@@ -1,0 +1,14 @@
+FROM gemma3-1b-qat-track1:latest
+COPY solve.py /app/solve.py
+COPY app/ /app/app/
+COPY local/ /app/local/
+COPY ml/ /app/ml/
+COPY entrypoint_gemma.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+# gemma base lacked openai; T2 client needs it
+RUN pip install --no-cache-dir openai
+# bake both local models so T1 can switch via LOCAL_MODEL env
+RUN ollama serve >/tmp/ollama.log 2>&1 & sleep 8 && ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && ollama pull gemma3:2b-it-q4_K_M; pkill -f "ollama serve" || true
+ENV LOCAL_T1_BACKEND=ollama
+ENV LOCAL_MODEL=gemma3:1b-it-qat
+ENTRYPOINT ["/app/entrypoint.sh"]
