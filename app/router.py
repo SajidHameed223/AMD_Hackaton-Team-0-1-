@@ -148,6 +148,18 @@ def solve_math(prompt: str) -> tuple[str, float]:
         if val is not None:
             return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
 
+    # Rate/distance catch-up: "A leaves at R1 [km/h]. B leaves N hours later at R2 [km/h]. when does B catch A?"
+    # ponytail: handles the common two-speed head-start class; multi-leg trips defer to T1.
+    speeds = re.findall(r"(\d+(?:\.\d+)?)\s*(?:km/h|kph|mph|m/s)", prompt, re.I)
+    head_start = re.search(r"(?:leaves?|starts?|departs?)\s+(?:the same point\s+)?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s+(?:later|after|behind)", prompt, re.I)
+    if len(speeds) >= 2 and head_start and "catch" in prompt.lower():
+        r1, r2 = float(speeds[0]), float(speeds[1])
+        t0 = float(head_start.group(1))
+        if r2 > r1:
+            catch = (r1 * t0) / (r2 - r1)
+            # ponytail: verify_math does float(result) -> emit bare number only
+            return (str(int(catch)) if catch == int(catch) else f"{catch:.4f}".rstrip("0").rstrip(".")), 1.0
+
     return "", 0.0
 
 
