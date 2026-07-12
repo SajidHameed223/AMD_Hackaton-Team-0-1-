@@ -37,7 +37,7 @@ class HarnessCycleTests(unittest.TestCase):
         result = run_cycle("What is the answer?", "math", model)
         self.assertEqual(result["answer"], "42")
         self.assertEqual(len(model.calls), 3)
-        self.assertEqual(model.calls[0][2], 512)
+        self.assertEqual(model.calls[0][2], 64)
         self.assertEqual(result["harness"]["validation_score"], 100)
 
     def test_trivial_cycle_skips_model_judge_after_deterministic_check(self):
@@ -105,12 +105,14 @@ class HarnessCycleTests(unittest.TestCase):
         model = ScriptedModel([PLAN, "A valid assignment.", PASS])
         result = run_cycle(prompt, "logical", model)
         self.assertEqual(result["harness"]["difficulty"], "hard")
-        self.assertIn("underdetermined", model.calls[1][1])
+        self.assertIn("Category: logical", model.calls[1][1])
+        self.assertIn("Follow every stated constraint", model.calls[1][1])
 
     def test_router_category_alias_receives_code_debug_playbook(self):
         model = ScriptedModel([PLAN, "```python\ndef fixed():\n    return 1\n```", PASS])
         run_cycle("Debug and correct this function: def fixed(): return 1", "debug", model)
-        self.assertIn("behavioral defect", model.calls[1][1])
+        self.assertIn("Category: code_debug", model.calls[1][1])
+        self.assertIn("actual defect", model.calls[1][1])
 
     def test_audit_log_does_not_contain_prompt_or_answer(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -155,7 +157,7 @@ class ToolTests(unittest.TestCase):
     def test_hard_rubric_and_analyzer_allow_only_local_tools(self):
         rubric = rubric_for("logical", "hard")
         self.assertIn("interacting constraints", rubric["difficulty_requirement"])
-        self.assertIn("Tools may only be calculator, python_syntax, python_execute, or current_time", ANALYZER_SYSTEM)
+        self.assertIn("calculator|python_syntax|python_execute|current_time", ANALYZER_SYSTEM)
 
     def test_deterministic_failure_cannot_be_overruled(self):
         merged = merge_verdict(
