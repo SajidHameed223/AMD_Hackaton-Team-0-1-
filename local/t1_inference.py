@@ -174,7 +174,7 @@ def _normalise_plan(raw: str, prompt: str, category: str) -> dict[str, Any]:
     return result
 
 
-ANALYZER_SYSTEM = """Return ONLY compact JSON in this exact shape: {\"tools\":[{\"name\":\"calculator|python_syntax|python_execute|current_time\",\"input\":\"...\"}]}. Request at most three allow-listed tools; return an empty tools list when none is needed. Do not include reasoning or any other fields."""
+ANALYZER_SYSTEM = """Return ONLY compact JSON in this exact shape: {"tools":[{"name":"calculator|python_syntax|python_execute|current_time","input":"..."}]}. Request at most three allow-listed tools; return an empty tools list when none is needed. Do not include reasoning or any other fields."""
 ANSWER_SYSTEM = """Produce only the final answer in English. Do not mention planning, tools, validators, or model internals. Follow the user task and output requirement exactly; use tool evidence only as reference."""
 JUDGE_SYSTEM = """Return ONLY compact JSON with arrays (never null): {\"pass\":true|false,\"score\":0-100,\"critical_errors\":[],\"improvements\":[],\"required_fixes\":[],\"confidence\":0-1}. Reject only a specific factual, arithmetic, logical, executable-code, completeness, or explicit-format error. Do not reject style or optional detail. Do not rewrite the answer."""
 

@@ -93,7 +93,10 @@ def _load_ml_router():
 def _try_local_infer(prompt: str, category: str) -> str | None:
     """Attempt T1 local model inference.  Returns answer or None on failure."""
     try:
-        from local.t1_inference import generate  # lazy — triggers model load
+        if os.environ.get("LOCAL_T1_BACKEND") == "ollama":
+            from local.ollama_t1 import generate  # ponytail: compact agent loop over Ollama HTTP
+        else:
+            from local.t1_inference import generate  # lazy — triggers model load
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)
         return result.get("answer", "").strip() or None
     except Exception as exc:
@@ -177,51 +180,41 @@ def main() -> None:
             print(f" ml=hard", end="")
 
         answer = ""
+        tier_used = "fail"
+        model_used = "none"
         try:
-            if not is_hard:
-                # Easy path: try T0 first
-                r = dispatch(prompt)
-                tier = r["tier"]
-                category = r.get("category", "unknown")
-                print(f" cat={category} tier={tier}", end="")
+            # Ponytail: always try T0 first (0 tokens) regardless of ML prediction.
+            # ML router only upgrades the cloud fallback to strong, never blocks T0.
+            r = dispatch(prompt)
+            tier = r["tier"]
+            category = r.get("category", "unknown")
+            print(f" cat={category} tier={tier}", end="")
 
-                if tier == "T0":
-                    answer = r["answer"]
-                    t0_count += 1
-                    print(" [OK] solved")
-                else:
-                    # T1: try local model
-                    local_ans = _try_local_infer(prompt, category)
-                    if local_ans is not None:
-                        answer = local_ans
-                        t1_count += 1
-                        print(" [OK] local")
-                    else:
-                        # T2: fall back to cloud
-                        cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan)
-                        if cloud_ans is not None:
-                            answer = cloud_ans
-                            t2_count += 1
-                            print(" [OK] cloud")
-                        else:
-                            fail_count += 1
-                            print(" [FAIL] all tiers failed")
+            if tier == "T0":
+                answer = r["answer"]
+                t0_count += 1
+                tier_used = "T0"
+                model_used = "deterministic"
+                print(" [OK] solved")
             else:
-                # Hard path: skip T0, go T1 -> T2 (strong)
-                category = dispatch(prompt).get("category", "unknown")
-                print(f" cat={category}", end="")
-
-                local_ans = _try_local_infer(prompt, category)
+                if os.environ.get("LOCAL_T1_BACKEND") != "none":
+                    local_ans = _try_local_infer(prompt, category)
+                else:
+                    local_ans = None
                 if local_ans is not None:
                     answer = local_ans
                     t1_count += 1
+                    tier_used = "T1"
+                    model_used = "local"
                     print(" [OK] local")
                 else:
-                    cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan, force_strong=True)
+                    cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan, force_strong=is_hard)
                     if cloud_ans is not None:
                         answer = cloud_ans
                         t2_count += 1
-                        print(" [OK] cloud(strong)")
+                        tier_used = "T2"
+                        model_used = "fireworks-strong" if is_hard else "fireworks"
+                        print(" [OK] cloud")
                     else:
                         fail_count += 1
                         print(" [FAIL] all tiers failed")
@@ -229,7 +222,14 @@ def main() -> None:
             fail_count += 1
             print(f" [FAIL] dispatch error: {exc}", file=sys.stderr)
 
-        results.append({"task_id": task_id, "answer": answer})
+        # ponytail: extra keys are ignored by grader; lets you see T2 fallback
+        results.append({
+            "task_id": task_id,
+            "answer": answer,
+            "tier": tier_used,
+            "model": model_used,
+            "empty": answer.strip() == "",
+        })
 
     # 6. Write results
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)

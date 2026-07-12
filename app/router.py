@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - keeps standalone demo mode working
 _MATH_PAT = re.compile(
     r"\b(calcul|comput|solv|how many|how much|remain|total|sum|differ|product"
     r"|percent|fraction|\d+\s*[\+\-\*\/\%\^]\s*\d+|average|mean|median"
-    r"|ratio|proportion|what is \d|equals|result of)\b", re.I)
+    r"|ratio|proportion|what is \d|equals|result of|area|perimeter)\b", re.I)
 _SENTIMENT_PAT = re.compile(
     r"\b(sentiment|tone|feeling|emotion|positive|negative|neutral"
     r"|attitude|mood|opinion|optimistic|pessimistic|analyze the (?:sentiment|tone|feeling)"
@@ -147,6 +147,34 @@ def solve_math(prompt: str) -> tuple[str, float]:
         val = _safe_eval_expr(arith.group(1))
         if val is not None:
             return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
+
+    # Rate/distance catch-up: "A leaves at R1 [km/h]. B leaves N hours later at R2 [km/h]. when does B catch A?"
+    # ponytail: handles the common two-speed head-start class; multi-leg trips defer to T1.
+    speeds = re.findall(r"(\d+(?:\.\d+)?)\s*(?:km/h|kph|mph|m/s)", prompt, re.I)
+    head_start = re.search(r"(?:leaves?|starts?|departs?)\s+(?:the same point\s+)?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s+(?:later|after|behind)", prompt, re.I)
+    if len(speeds) >= 2 and head_start and "catch" in prompt.lower():
+        r1, r2 = float(speeds[0]), float(speeds[1])
+        t0 = float(head_start.group(1))
+        if r2 > r1:
+            catch = (r1 * t0) / (r2 - r1)
+            # ponytail: verify_math does float(result) -> emit bare number only
+            return (str(int(catch)) if catch == int(catch) else f"{catch:.4f}".rstrip("0").rstrip(".")), 1.0
+
+    # ponytail: original price from a discounted price ("costs 40 after 20% discount")
+    disc = re.search(r"(\d+(?:\.\d+)?)\s*(?:dollars?|usd|\$)?\s*(?:after|with|for|at)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:off|discount|markdown)", prompt, re.I)
+    if disc:
+        price = float(disc.group(1)); pct = float(disc.group(2))
+        if 0 < pct < 100:
+            orig = price / (1 - pct / 100)
+            return (str(int(orig)) if orig == int(orig) else f"{orig:.2f}"), 1.0
+
+    # ponytail: rectangle area/perimeter from two dimensions ("8 cm by 5 cm")
+    dims = re.findall(r"(\d+(?:\.\d+)?)\s*(?:cm|m|ft|in|mm|km)?", prompt)
+    if re.search(r"rectangle|area|perimeter", prompt, re.I) and len(dims) >= 2:
+        a, b = float(dims[0]), float(dims[1])
+        if "perimeter" in prompt.lower():
+            return str(int(2 * (a + b)) if 2 * (a + b) == int(2 * (a + b)) else 2 * (a + b)), 1.0
+        return str(int(a * b) if a * b == int(a * b) else a * b), 1.0
 
     return "", 0.0
 
@@ -591,10 +619,20 @@ def solve_factual(prompt: str) -> tuple[str, float]:
     return "UNKNOWN", 0.3
 
 
+def solve_code_gen(prompt: str) -> tuple[str, float]:
+    # ponytail: only the deterministic-trivial case; real synthesis stays T1.
+    if re.search(r"area of (?:a |the )?rectangle", prompt, re.I) or \
+       (re.search(r"rectangle", prompt, re.I) and "area" in prompt.lower()):
+        return ("def rectangle_area(length, width):\n    return length * width", 0.9)
+    if re.search(r"perimeter of (?:a |the )?rectangle", prompt, re.I):
+        return ("def rectangle_perimeter(length, width):\n    return 2 * (length + width)", 0.9)
+    return "", 0.0
+
+
 _SOLVERS = {
     "math": solve_math, "sentiment": solve_sentiment, "ner": solve_ner,
     "summarization": solve_summarization, "code_debug": solve_code_debug,
-    "logical": solve_logical, "factual": solve_factual,
+    "logical": solve_logical, "factual": solve_factual, "code_gen": solve_code_gen,
 }
 _CONF_THRESHOLD = 0.8
 
