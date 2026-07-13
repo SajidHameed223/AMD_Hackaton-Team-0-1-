@@ -10,8 +10,8 @@ class FireworksClient:
         self,
         api_key: str,
         base_url: str,
-        max_retries: int = 1,
-        per_task_timeout_s: float = 60.0,
+        max_retries: int = 0,
+        per_task_timeout_s: float = 25.0,
     ) -> None:
         self.max_retries = max_retries
         self.per_task_timeout_s = per_task_timeout_s
@@ -47,7 +47,8 @@ class FireworksClient:
                             ],
                             max_tokens=max_tokens,
                             temperature=0.2,
-                            reasoning_effort=reasoning_effort,
+                            **({"reasoning_effort": reasoning_effort}
+                               if reasoning_effort else {}),
                         ),
                         timeout=self.per_task_timeout_s,
                     )

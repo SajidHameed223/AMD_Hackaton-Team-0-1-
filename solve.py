@@ -184,27 +184,31 @@ def main() -> None:
                 category = r.get("category", "unknown")
                 print(f" cat={category} tier={r['tier']}", end="")
 
-                # T2: Fireworks primary reasoning tier (0 tokens via proxy).
-                cloud_ans = None
-                if cloud_client is not None:
-                    cloud_ans, tok, finish = _try_cloud_infer(prompt, cloud_client, model_plan)
-                    if cloud_ans and finish != "length":
-                        answer = cloud_ans
-                        t2_count += 1
-                        print(f" [OK] cloud (tok={tok})")
-                    elif finish == "length":
-                        print(" [T2 truncated] falling back to local", end="")
-                    else:
-                        print(" [T2 empty] falling back to local", end="")
-
-                # T1: local GGUF fallback when Fireworks is unavailable/truncated.
-                if not answer:
-                    if os.environ.get("LOCAL_T1_BACKEND") != "none":
-                        local_ans, _ = _try_local_infer(prompt, category)
-                        if local_ans:
-                            answer = local_ans
-                            t1_count += 1
-                            print(" [OK] local")
+                # T1: local GGUF model first (0 tokens — does NOT count on the
+                # leaderboard, only T2/Fireworks tokens do). Use it whenever it
+                # can answer so we spend as few T2 tokens as possible.
+                local_ans, _ = _try_local_infer(prompt, category)
+                if local_ans:
+                    answer = local_ans
+                    t1_count += 1
+                    print(" [OK] local")
+                else:
+                    # T2: Fireworks primary reasoning tier (0 tokens to US via the
+                    # competition proxy, but these calls ARE what the leaderboard
+                    # ranks by ascending token count). Only reached when neither
+                    # deterministic nor local could answer. Fewer T2 calls = higher
+                    # rank, so this is the LAST resort, not the primary.
+                    cloud_ans = None
+                    if cloud_client is not None:
+                        cloud_ans, tok, finish = _try_cloud_infer(prompt, cloud_client, model_plan)
+                        if cloud_ans and finish != "length":
+                            answer = cloud_ans
+                            t2_count += 1
+                            print(f" [OK] cloud (tok={tok})")
+                        elif finish == "length":
+                            print(" [T2 truncated] empty", end="")
+                            fail_count += 1
+                            print(" [FAIL] all tiers failed")
                         else:
                             fail_count += 1
                             print(" [FAIL] all tiers failed")

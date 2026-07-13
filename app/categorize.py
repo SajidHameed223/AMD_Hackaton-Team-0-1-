@@ -22,7 +22,7 @@ class CategorySpec:
     system_prompt: str
     max_tokens: int
     use_strong_model: bool
-    reasoning_effort: str = "none"
+    reasoning_effort: str = ""
 
 
 _SPECS: dict[Category, CategorySpec] = {
@@ -32,9 +32,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Classify sentiment as POSITIVE, NEGATIVE, or NEUTRAL. "
             "One-sentence justification. No preamble."
         ),
-        max_tokens=60,
+        max_tokens=120,
         use_strong_model=False,
-        reasoning_effort="none",
     ),
     Category.NER: CategorySpec(
         Category.NER,
@@ -42,9 +41,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Extract named entities as `entity: TYPE` pairs. "
             "Types: PERSON, ORG, LOCATION, DATE. No preamble."
         ),
-        max_tokens=150,
+        max_tokens=300,
         use_strong_model=False,
-        reasoning_effort="none",
     ),
     Category.SUMMARIZATION: CategorySpec(
         Category.SUMMARIZATION,
@@ -52,9 +50,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Summarize per the requested length/format. "
             "Output only the summary."
         ),
-        max_tokens=180,
+        max_tokens=400,
         use_strong_model=False,
-        reasoning_effort="none",
     ),
     Category.FACTUAL: CategorySpec(
         Category.FACTUAL,
@@ -62,9 +59,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Answer accurately and directly. Be concise but cover "
             "every part of the question. No filler."
         ),
-        max_tokens=200,
+        max_tokens=420,
         use_strong_model=False,
-        reasoning_effort="none",
     ),
     Category.MATH: CategorySpec(
         Category.MATH,
@@ -72,9 +68,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Solve step by step. Final answer as 'Answer: <value>'. "
             "Show only necessary arithmetic."
         ),
-        max_tokens=250,
+        max_tokens=600,
         use_strong_model=True,
-        reasoning_effort="none",
     ),
     Category.LOGIC: CategorySpec(
         Category.LOGIC,
@@ -82,9 +77,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Solve the logic puzzle. Note how constraints eliminate "
             "options. Final answer as 'Answer: <value>'."
         ),
-        max_tokens=250,
+        max_tokens=600,
         use_strong_model=True,
-        reasoning_effort="none",
     ),
     Category.CODE_DEBUG: CategorySpec(
         Category.CODE_DEBUG,
@@ -92,9 +86,8 @@ _SPECS: dict[Category, CategorySpec] = {
             "Identify the bug briefly, then give corrected complete "
             "code in a code block. No lengthy explanation."
         ),
-        max_tokens=350,
+        max_tokens=700,
         use_strong_model=True,
-        reasoning_effort="none",
     ),
     Category.CODE_GEN: CategorySpec(
         Category.CODE_GEN,
@@ -102,16 +95,15 @@ _SPECS: dict[Category, CategorySpec] = {
             "Write a correct function meeting the spec exactly. "
             "Single code block. Minimal explanation."
         ),
-        max_tokens=350,
+        max_tokens=700,
         use_strong_model=True,
-        reasoning_effort="none",
     ),
 }
 
 _DEFAULT_SPEC = CategorySpec(
     Category.FACTUAL,
     system_prompt="Answer directly and concisely.",
-    max_tokens=250,
+    max_tokens=420,
     use_strong_model=False,
 )
 
