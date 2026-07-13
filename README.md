@@ -136,3 +136,7 @@ See `.env.example` for the full list. Key ones:
 ## Chat Screen
 
 ![Chat screen](assests/chat%20screen.png)
+
+## Stats Screen
+
+![Stats screen](assests/stats.png)
