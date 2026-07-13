@@ -26,6 +26,9 @@ _CODE_RULE = (
 
 def generate(prompt, task_type="default", speed_mode=True, model_id=None):
     model = os.environ.get("LOCAL_MODEL", "qwen2.5-coder:1.5b-instruct-q4_K_M")
+    # ponytail: qwen-coder swap made c2/g2 worse. Reverted to gemma-4-2B for all.
+    # Code correctness now handled by T0 template solver + compile() retry in ollama_t1.
+    code_model = model
     url = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
     category = canonical_category(task_type)
 
@@ -35,12 +38,12 @@ def generate(prompt, task_type="default", speed_mode=True, model_id=None):
         elif system == JUDGE_SYSTEM:
             cap, timeout = 64, 15
         else:
-            cap, timeout = (200, 26) if category in _CODE else (160, 26)
+            cap, timeout = (384, 26) if category in _CODE else (256, 26)
             if category in _CODE:
                 system += _CODE_RULE
 
         payload = json.dumps({
-            "model": model,
+            "model": code_model,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
@@ -51,7 +54,7 @@ def generate(prompt, task_type="default", speed_mode=True, model_id=None):
                 "temperature": 0,
                 "top_k": 1,
                 "num_predict": min(max_tokens, cap),
-                "num_ctx": 768,
+                "num_ctx": 2048,
                 "stop": ["\n\n\n"],
             },
         }).encode()
@@ -67,7 +70,16 @@ def generate(prompt, task_type="default", speed_mode=True, model_id=None):
 
     if category in _CODE:
         started = time.monotonic()
-        answer = call(ANSWER_SYSTEM, f"Task:\n{prompt}\n\nReturn code only.", 160)
+        user = f"Task:\n{prompt}\n\nReturn code only."
+        answer = call(ANSWER_SYSTEM, user, 512)
+        # ponytail: retry if the model truncated (incomplete syntax). gemma halts
+        # mid-function on recursion; ast.parse catches it. Max 2 nudges.
+        for _ in range(2):
+            try:
+                compile(answer, "<code>", "exec")
+                break
+            except SyntaxError:
+                answer = call(ANSWER_SYSTEM, user + "\n\nWrite the COMPLETE function. Do not stop mid-word. End with the final return statement.", 512)
         check = deterministic_checks(prompt, answer, category, [])
         if not check["pass"]:
             raise HarnessFailure("; ".join(check["errors"]))

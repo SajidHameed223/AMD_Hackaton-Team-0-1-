@@ -1,0 +1,372 @@
+[
+  {
+    "task_id": "cod-066",
+    "prompt": "Write a Python function that flattens a nested list of lists.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "mat-019",
+    "prompt": "A bank account has $5,000. It earns 3% interest per year for 4 years, compounded annually. What is the balance after 4 years, rounded to the nearest cent?",
+    "category": "math"
+  },
+  {
+    "task_id": "sum-037",
+    "prompt": "Summarize the following passage in three bullet points, each no longer than 15 words: 'Remote work has transformed how companies operate globally. Employees gain flexibility and reduced commute times, leading to reported improvements in work-life balance. However, challenges persist around collaboration, company culture, and the blurring of personal and professional boundaries. Organisations are responding by investing in digital collaboration tools and rethinking office space as a hub for social and creative work rather than daily attendance.'",
+    "category": "summarization"
+  },
+  {
+    "task_id": "fac-009",
+    "prompt": "What is the difference between machine learning and deep learning? Briefly explain how each works.",
+    "category": "factual"
+  },
+  {
+    "task_id": "fac-008",
+    "prompt": "What is the capital of Italy, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "log-059",
+    "prompt": "Three boxes: one has apples, one oranges, one both. Labels are all wrong. You pull one fruit from the box labeled 'both' and get an apple. What is in each box?",
+    "category": "logical"
+  },
+  {
+    "task_id": "tri-071",
+    "prompt": "Write a Python program that generates a QGroundControl mission JSON file for a drone to fly a 4 metre square at 2 metre altitude around central Seattle, including takeoff, waypoints, and return-to-launch.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "cod-060",
+    "prompt": "Write a Python function that adds two numbers a and b.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "ner-044",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: Tim Cook revealed that Apple would host its annual developer conference in Cupertino this June.",
+    "category": "ner"
+  },
+  {
+    "task_id": "sum-040",
+    "prompt": "Summarize the following passage in exactly two sentences sentences: 'The Mediterranean diet emphasizes vegetables, olive oil, fish, and whole grains while limiting red meat and processed food, and is associated with lower cardiovascular risk.'",
+    "category": "summarization"
+  },
+  {
+    "task_id": "mat-016",
+    "prompt": "A recipe requires 3/4 cup of sugar for 12 cookies. How much sugar is needed for 30 cookies? If sugar costs $2.40 per cup, what is the total cost for 30 cookies?",
+    "category": "math"
+  },
+  {
+    "task_id": "cod-065",
+    "prompt": "Write a Python function that returns the maximum value in a list.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "log-057",
+    "prompt": "If it rains, the ground is wet. The ground is wet. Can we conclude it rained? Explain.",
+    "category": "logical"
+  },
+  {
+    "task_id": "sen-031",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'Customer service was rude and unhelpful, yet the product quality exceeded my expectations.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "cod-053",
+    "prompt": "This sort is broken: def mysort(a): return a if len(a)<=1 else mysort(a[1:])+[a[0]]. Fix to actually sort.",
+    "category": "code_debug"
+  },
+  {
+    "task_id": "sen-030",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'The app crashed three times and lost my work, but the new update fixed everything and now it is smooth.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "cod-049",
+    "prompt": "This function should return the max of a list but has a bug: def get_max(nums): return nums[0]. Find and fix it.",
+    "category": "code_debug"
+  },
+  {
+    "task_id": "cod-052",
+    "prompt": "Bug: def avg(nums): return sum(nums). Should divide by length. Provide corrected code.",
+    "category": "code_debug"
+  },
+  {
+    "task_id": "cod-067",
+    "prompt": "Write a Python function that computes the median of a list of numbers.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "mat-020",
+    "prompt": "A train travels 120 km in 2 hours, then 180 km in 3 hours. What is the average speed for the whole trip in km/h?",
+    "category": "math"
+  },
+  {
+    "task_id": "mat-021",
+    "prompt": "A shirt costs $40 after a 20% discount. What was the original price?",
+    "category": "math"
+  },
+  {
+    "task_id": "ner-041",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: On March 15 2023, Sundar Pichai announced that Google would open a new AI research lab in Zurich, partnering with ETH Zurich to focus on large language model safety.",
+    "category": "ner"
+  },
+  {
+    "task_id": "cod-051",
+    "prompt": "This code should dedupe while keeping order but is wrong: def dedupe(items): return list(set(items)). Fix it.",
+    "category": "code_debug"
+  },
+  {
+    "task_id": "fac-003",
+    "prompt": "What is the capital of Japan, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "log-056",
+    "prompt": "All bloops are razzies. All razzies are lazzies. Are all bloops definitely lazzies?",
+    "category": "logical"
+  },
+  {
+    "task_id": "cod-064",
+    "prompt": "Write a Python function rectangle_perimeter(length, width) that returns the perimeter.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "log-054",
+    "prompt": "Three friends, Sam, Jo, and Lee, each own a different pet: cat, dog, bird. Sam does not own the bird. Jo owns the dog. Who owns the cat?",
+    "category": "logical"
+  },
+  {
+    "task_id": "cod-050",
+    "prompt": "Find the bug and provide a corrected Python implementation:\ndef rolling_average(values, window):\n    result = []\n    for i in range(len(values)):\n        start = i - window\n        chunk = values[start:i]\n        result.append(sum(chunk) / window)\n    return result\n\nThe intended output has one average per complete window only.",
+    "category": "code_debug"
+  },
+  {
+    "task_id": "mat-024",
+    "prompt": "A company made 1,200 units. 5% were defective. They fixed half the defective ones. How many defective units remain?",
+    "category": "math"
+  },
+  {
+    "task_id": "log-058",
+    "prompt": "A is taller than B. B is taller than C. Who is the shortest?",
+    "category": "logical"
+  },
+  {
+    "task_id": "sen-026",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'The battery life is great, but the screen scratches too easily.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "mat-017",
+    "prompt": "A service has 18,400 users in January. Users grow 7% monthly for 5 months, then churn removes 11%, then growth resumes at 4% monthly for 3 months. What is the final user count, rounded to the nearest whole user?",
+    "category": "math"
+  },
+  {
+    "task_id": "sen-034",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'The hotel room was clean and comfortable, though the breakfast was mediocre at best.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "mat-023",
+    "prompt": "A laptop battery lasts 6 hours. After 18 months it retains 80% capacity. How many hours does it last now?",
+    "category": "math"
+  },
+  {
+    "task_id": "ner-048",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: Elon Musk confirmed that Tesla would expand its factory in Berlin, working with the local government on permits.",
+    "category": "ner"
+  },
+  {
+    "task_id": "mat-025",
+    "prompt": "A subscription is $15/month. A yearly plan is $150. How much is saved per year by choosing the yearly plan?",
+    "category": "math"
+  },
+  {
+    "task_id": "cod-063",
+    "prompt": "Write a Python function that returns the area of a rectangle given length and width.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "fac-007",
+    "prompt": "What is the capital of India, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "ner-043",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: On 12 March 2026, Priya Menon met AMD engineers at the London AI Lab before briefing the Open Compute Project.",
+    "category": "ner"
+  },
+  {
+    "task_id": "cod-062",
+    "prompt": "Write a Python function that returns the second-largest number in a list, handling duplicates correctly.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "fac-010",
+    "prompt": "Explain the difference between RAM and ROM in a computer. What is each type used for?",
+    "category": "factual"
+  },
+  {
+    "task_id": "ner-047",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: Ana Costa signed with the startup Neuralink in Lisbon during the spring summit.",
+    "category": "ner"
+  },
+  {
+    "task_id": "mat-022",
+    "prompt": "A rectangle is 8m by 5m. What is its area and perimeter?",
+    "category": "math"
+  },
+  {
+    "task_id": "sen-028",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'Just got my order. Box was dented and the manual was missing, but honestly the device itself is flawless and set up in under 5 minutes.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "fac-011",
+    "prompt": "Name the three primary colors in the RGB color model and briefly explain why displays use RGB instead of RYB.",
+    "category": "factual"
+  },
+  {
+    "task_id": "fac-001",
+    "prompt": "What is the capital of Australia, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "tri-069",
+    "prompt": "Classify this message as Spam or Ham and return strict JSON with label and reason: Click here to win a lottery prize if you verify your bank account today.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "sum-038",
+    "prompt": "Summarize the following passage in 25 words: 'Edge inference can lower latency and cost, but models deployed locally need careful routing, monitoring, and fallback paths when prompts exceed local capability.'",
+    "category": "summarization"
+  },
+  {
+    "task_id": "tri-070",
+    "prompt": "Build a complete HTML page that compares two images with a draggable before/after slider, accessible labels, responsive layout, and no external JavaScript dependencies.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "cod-061",
+    "prompt": "Write a Python function that returns the factorial of n using recursion.",
+    "category": "code_gen"
+  },
+  {
+    "task_id": "sen-027",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'The product arrived two days late and the packaging was damaged, but the item worked perfectly and customer support resolved my complaint within an hour.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "sen-035",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'Setup was a nightmare and the instructions were unclear, but once running it performs admirably.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "ner-045",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: Dr. Li Wei presented at the NeurIPS conference in Vancouver, collaborating with researchers from Microsoft Research.",
+    "category": "ner"
+  },
+  {
+    "task_id": "ner-042",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: Maria Sanchez joined Fireworks AI in Berlin last March.",
+    "category": "ner"
+  },
+  {
+    "task_id": "ner-046",
+    "prompt": "Extract named entities as JSON with keys person, organization, location, and date: On January 8 2024, Satya Nadella spoke at the World Economic Forum in Davos about responsible AI.",
+    "category": "ner"
+  },
+  {
+    "task_id": "fac-013",
+    "prompt": "What is Docker image manifest, and what does it point to?",
+    "category": "factual"
+  },
+  {
+    "task_id": "tri-072",
+    "prompt": "Explain the difference between TCP and UDP in one paragraph, with one use case each.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "fac-002",
+    "prompt": "What is the capital of France, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "sum-039",
+    "prompt": "Summarize the following passage in one sentence: 'Quantum computing uses superposition and entanglement to perform certain calculations exponentially faster than classical computers, though error correction remains a major engineering hurdle.'",
+    "category": "summarization"
+  },
+  {
+    "task_id": "sen-033",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'Absolutely fantastic experience, fast shipping and exactly as described.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "tri-074",
+    "prompt": "Write an OCaml program that calls a SOAP service, builds the XML envelope, sends the HTTP request, handles errors, and parses the response.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "tri-068",
+    "prompt": "Summarize ISO 22081 in plain English, including scope, main requirements, and how it changes drawing interpretation for general geometrical tolerances.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "fac-006",
+    "prompt": "What is the capital of Canada, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "tri-073",
+    "prompt": "What are the four layers of the TCP/IP model? Briefly describe each.",
+    "category": "trigger"
+  },
+  {
+    "task_id": "fac-005",
+    "prompt": "What is the capital of Brazil, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "log-055",
+    "prompt": "Four services A, B, C, and D deploy in four time slots. A must deploy before C. B cannot deploy first or last. D deploys immediately after B. C is not fourth. List every valid deployment order.",
+    "category": "logical"
+  },
+  {
+    "task_id": "fac-012",
+    "prompt": "Why is transformer attention useful for resolving ambiguous pronouns? Use one concise paragraph and include one limitation.",
+    "category": "factual"
+  },
+  {
+    "task_id": "mat-014",
+    "prompt": "A store has 240 items. It sells 15% on Monday and 60 more on Tuesday. How many remain?",
+    "category": "math"
+  },
+  {
+    "task_id": "mat-018",
+    "prompt": "A class has 90 students. 40% are girls. Of the girls, 25% play soccer. How many girls play soccer?",
+    "category": "math"
+  },
+  {
+    "task_id": "sen-029",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'I love the design and the speed is amazing, but the price is way too high for what you get.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "sen-032",
+    "prompt": "Classify the sentiment as Positive, Negative, or Mixed and give a one-sentence reason: 'This is the worst purchase I have made, the material feels cheap and it broke on day one.'",
+    "category": "sentiment"
+  },
+  {
+    "task_id": "sum-036",
+    "prompt": "Summarize the following passage in two sentences: 'Machine learning is increasingly deployed in healthcare for diagnosis, treatment planning, and patient monitoring. These systems analyse medical images, predict patient deterioration, and spot patterns in electronic health records that might be missed by human clinicians. However, concerns remain about model interpretability, data privacy, liability when errors occur, and the potential for algorithmic bias to worsen existing healthcare disparities. Regulatory frameworks are still catching up with the pace of deployment, creating uncertainty for healthcare providers and technology developers alike.'",
+    "category": "summarization"
+  },
+  {
+    "task_id": "fac-004",
+    "prompt": "What is the capital of Germany, and what body of water is it near?",
+    "category": "factual"
+  },
+  {
+    "task_id": "mat-015",
+    "prompt": "A warehouse starts with 2,400 units. In Q1 it sells 37% of stock. In Q2 it restocks 800 units. In Q3 it sells 640 units. How many remain at the end of Q3?",
+    "category": "math"
+  }
+]

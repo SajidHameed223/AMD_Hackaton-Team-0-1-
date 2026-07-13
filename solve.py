@@ -55,6 +55,10 @@ def _setup_cloud_client():
     The harness injects FIREWORKS_BASE_URL, FIREWORKS_API_KEY, and
     ALLOWED_MODELS at runtime.
     """
+    # ponytail: T2 gated off by ENABLE_T2. No cloud client, no openai import,
+    # so the slim ollama base needs no pip install.
+    if os.environ.get("ENABLE_T2") != "1":
+        return None, None
     base_url = os.environ.get("FIREWORKS_BASE_URL", "")
     api_key = os.environ.get("FIREWORKS_API_KEY", "")
     models = _parse_allowed_models()
@@ -98,7 +102,13 @@ def _try_local_infer(prompt: str, category: str) -> str | None:
         else:
             from local.t1_inference import generate  # lazy — triggers model load
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)
-        return result.get("answer", "").strip() or None
+        ans = result.get("answer", "").strip() or None
+        # ponytail: strip ``` fences the 4b model wraps code in; grader wants bare code.
+        if ans and category in ("code_debug", "code_gen", "code") and ans.startswith("```"):
+            import re as _re
+            f = _re.search(r"```(?:python)?\s*(.*?)```", ans, _re.S)
+            ans = (f.group(1) if f else ans).strip() or None
+        return ans
     except Exception as exc:
         # Team policy: an exhausted local repair cycle enters existing T2. If
         # this conflicts with the routing strategy, remove this fallback here.
@@ -208,7 +218,12 @@ def main() -> None:
                     model_used = "local"
                     print(" [OK] local")
                 else:
-                    cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan, force_strong=is_hard)
+                    # ponytail: T2 (Fireworks) OFF by default => 0 tokens. Harness injects
+                    # FIREWORKS_* at grade time so it can't be disabled via env; gate here.
+                    if os.environ.get("ENABLE_T2") == "1":
+                        cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan, force_strong=is_hard)
+                    else:
+                        cloud_ans = None
                     if cloud_ans is not None:
                         answer = cloud_ans
                         t2_count += 1

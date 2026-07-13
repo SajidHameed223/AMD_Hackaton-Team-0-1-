@@ -1,25 +1,26 @@
-venv/
-.venv*/
-get-pip.py
+# Build/test artifacts (never commit)
+bench_out/
+bench_out2/
+bench_out100/
+order_out/
+order_out2/
+single_out/
+*.json.bak
+
+# Local scratch / debug scripts
+_c.py
+_c2.py
+_t.py
+order_test.json
+order_test2.json
+proxy_tasks.json
+
+# Python
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.log
+*.pyc
+.venv/
 .env
-.env.*
-!.env.example
-.vscode/*.code-workspace
-# ML model artifacts (regenerate via: python -m ml.train)
-ml/*.pkl
 
-# Local model artifacts (too large for GitHub)
-models/
-
-# Runtime logs and dev artifacts (never commit)
-logs.jsonl
-request_log.jsonl
-*.jsonl
-test.html
-dashboard.htmlt1bench-out/
-meeting-out/
+# OS
+.DS_Store
+Thumbs.db

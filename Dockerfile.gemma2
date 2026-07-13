@@ -1,0 +1,38 @@
+# Ponytail: Gulliver-merge build. Swap gemma3:4b -> gemma-4-E2B (Gulliver's 100% model),
+# baked as an ollama model from the HF GGUF. python:3.11-slim + ollama binary.
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    OLLAMA_HOST=0.0.0.0:11434
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates zstd libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ollama binary (needs zstd for extraction).
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Download Gulliver's exact general model GGUF (gemma-4-E2B q4_0) into the build context.
+# ponytail: HF redirect (302) -> -L follows it.
+RUN mkdir -p /models && \
+    curl -fsSL -L "https://huggingface.co/google/gemma-4-E2B-it-qat-q4_0-gguf/resolve/main/gemma-4-E2B_q4_0-it.gguf" -o /models/gemma-4-E2B_q4_0-it.gguf
+
+# Bring in the app source.
+WORKDIR /app
+COPY . /app
+
+# Create the ollama model from the GGUF via a Modelfile.
+RUN printf 'FROM /models/gemma-4-E2B_q4_0-it.gguf\n' > /models/Modelfile && \
+    ollama serve & sleep 8 && \
+    ollama create gemma4:2b -f /models/Modelfile && \
+    ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && \
+    echo "=== models ===" && ollama list
+
+ENV LOCAL_MODEL=gemma4:2b \
+    LOCAL_T1_BACKEND=ollama \
+    ENABLE_T2=0
+
+# Container entrypoint per hackathon contract.
+COPY entrypoint_gemma.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]

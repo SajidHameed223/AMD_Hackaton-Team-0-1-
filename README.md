@@ -1,247 +1,77 @@
-# Team O(1) — Track 1: Hybrid Token-Efficient Routing Agent
+# Team O(1) — Track 1 Agent (0-Token Build)
 
-**AMD Developer Hackathon ACT II · Track 1 (Agentic AI)**
+Submission for the AMD Developer Hackathon ACT II, Track 1.
 
-A self-contained Docker container that solves agentic tasks across 8 categories
-while minimizing cloud-token spend. The submission routes each task through a
-deterministic solver first, then a local model, then an optional cloud
-fallback — always emitting valid, complete JSON.
+This agent answers all eight Track 1 task categories while consuming
+**zero Fireworks tokens**. Local inference is scored as zero tokens by the
+harness; only calls through Fireworks AI count. This build uses local
+inference exclusively, so it scores 0 tokens by architecture.
 
----
+## Categories covered
 
-## How scoring works
-
-- The grader runs **19 fixed tasks**. Score = `n / 19`. An **80% accuracy gate**
-  is required to appear on the leaderboard.
-- Rankings are **ascending by total Fireworks tokens** recorded by the judging
-  proxy — **fewer tokens ranks higher**. Zero token usage is a valid, legal
-  strategy (the local model runs inside the container and does not count toward
-  the token score).
-- The final evaluation uses **refreshed, randomized prompts**, so the design
-  favors general, verifiable solving over memorizing the practice set.
-
----
+| Category | Local strategy |
+|----------|----------------|
+| factual | Deterministic lookup + local model fallback |
+| math | Deterministic arithmetic (`ast` + `Decimal`) — exact, no model |
+| sentiment | Lexicon-based mixed/pos/neg with local-model fallback |
+| summarization | Deterministic length/format enforcement (exact N sentences/words) |
+| ner | Regex entity extraction (PERSON/ORG/LOC/DATE) |
+| code_debug | Deterministic bug fix + `compile()` verification |
+| code_gen | Deterministic templates for canonical patterns (add, factorial, max, second-largest, area, perimeter) + local model for novel synthesis |
+| logical | Local model with `compile()`/format checks |
 
 ## Architecture
 
-The graded artifact is a single container. It reads a task list, routes each
-task to the cheapest tier that can answer it, and writes one result per task.
-
 ```
-/input/tasks.json
-      │
-      ▼
-  solve.py  ── reads tasks, orchestrates the tier chain, writes results
-      │
-      ├─ T0  app/router.py  · deterministic Python solvers (0 tokens)
-      │        · factual · math · sentiment · summarization
-      │        · NER · code_debug · logical · code_gen
-      │
-      ├─ T1  local/ollama_t1.py · local LLM inference via Ollama (0 Fireworks tokens)
-      │        · bundled model: gemma3:1b-it-qat (pulled at build time)
-      │
-      └─ T2  app/fireworks_client.py · cloud fallback (costs tokens)
-               · only used when T0/T1 cannot answer
-               · reads ALLOWED_MODELS + FIREWORKS_* from the grading env
-
-      ▼
-/output/results.json   (every task_id present, even on failure → "")
+tasks.json ──▶ router.classify() ──▶ T0 deterministic solver (0 tokens)
+                                    └─▶ T1 local model (gemma-4-2B, 0 tokens)
 ```
 
-Each task is attempted in order: **T0 → T1 → T2**. If a tier fails, the next
-tier is tried. If all tiers fail, an empty string is emitted so the output is
-always complete and valid JSON. The container exits `0`.
+- **T0 (deterministic):** math, NER, summarization length, sentiment lexicon,
+  canonical code templates. Zero tokens, exact output.
+- **T1 (local model):** `gemma-4-E2B` (q4_0 GGUF) served via Ollama. Used only
+  when no deterministic solver applies. Code tasks get a `compile()` retry guard
+  so truncated generation is caught and re-attempted.
+- **T2 (Fireworks):** gated OFF by default (`ENABLE_T2=0`). The image never
+  imports `openai` and never constructs a cloud client unless explicitly
+  enabled, so the graded run is pure local = 0 tokens.
 
-### Why this ordering
+## Running it
 
-- **T0 covers the deterministic, verifiable cases** with exact answers — no
-  model, no tokens, no latency risk.
-- **T1 handles the open-ended cases** locally (summarization, free-form
-  generation, harder reasoning) at zero cloud cost.
-- **T2 is a safety net only.** Using it costs tokens and lowers the ranking, so
-  it is reached only when both local tiers come up empty.
-
----
-
-## Categories
-
-The router classifies each prompt into one of eight categories before
-dispatching:
-
-`factual` · `math` · `sentiment` · `summarization` · `ner` · `code_debug` · `logical` · `code_gen`
-
----
-
-## Folder structure
-
-```
-O1-AMD-Hackathon/
-├── solve.py                 # Container entrypoint (graded artifact)
-├── Dockerfile.gemma        # GRADED submission image (Ollama + gemma3:1b + app + local + ml)
-├── Dockerfile               # Alternate Ollama-based local runtime (demo chat path)
-├── Dockerfile.track1        # Experimental Qwen/Torch variant (not the graded image)
-├── requirements.txt         # Pinned Python dependencies
-├── .dockerignore            # Keeps the build context lean
-│
-├── app/                     # Deterministic routing + cloud client
-│   ├── router.py            # T0 solvers + dispatch() (categorize → solve → verify)
-│   ├── categorize.py        # T2 category spec + system prompts
-│   ├── fireworks_client.py  # T2 Fireworks client (reads grading env)
-│   ├── model_select.py      # T2 cheap/strong model plan
-│   ├── track1_router.py     # Frontend-facing router (used by the chat UI)
-│   └── vllm_client.py       # Reference VLLM client (not in graded path)
-│
-├── local/                   # Local LLM inference (T1)
-│   ├── t1_inference.py      # solve.py-facing T1 tuning surface
-│   └── ollama_t1.py         # generate() — Ollama-backed single-pass inference (gemma3:1b)
-│
-├── ml/                      # Optional ML complexity router (predicts hard/easy)
-│   └── router_model.pkl      # Trained artifact (loaded if present)
-│
-├── models/                  # (legacy) bundled weights dir — now unused; gemma pulled at build
-│
-├── scripts/
-│   └── verify_t0.py         # T0 correctness gate (CI / pre-commit)
-│
-├── test-input/              # Practice task set (16 tasks, 8 categories × 2)
-├── test-output/             # Local run outputs
-├── docker-test-input/       # Docker run inputs
-├── docker-test-output/      # Docker run outputs
-│
-└── AGENTS.md                # Contributor/agent context for the repo
-```
-
----
-
-## Local model (T1)
-
-The container runs a local LLM through Ollama (`local/ollama_t1.py`) so T1 can
-answer open-ended tasks without any cloud call. The default model is
-`gemma3:1b-it-qat`, pulled into the image at build time and served by the
-in-container Ollama daemon (`entrypoint_gemma.sh`). It is selected via the
-`LOCAL_MODEL` environment variable.
-
-If the local backend is disabled (`LOCAL_T1_BACKEND=none`) or the model is
-unavailable, T1 fails fast and the pipeline falls through to T2 — the
-container still produces complete output and exits `0`.
-
-> Note: large weight files are excluded from git (see `.gitignore`). They are
-> present in the built image, not in the source repo.
-
-### Multi-stage local harness
-
-For non-deterministic T1 tasks, `local/t1_inference.py` reuses the one loaded
-local model for a bounded cycle: structured analysis, approved local tools,
-answer generation, independent rubric validation, and up to two targeted
-repairs. It never exposes raw chain-of-thought or changes the submission
-contract: `solve.py` still emits only `{task_id, answer}` and retains T2 as the
-existing fallback if the local validator cannot accept an answer.
-
-The default local deadline is 26 seconds, preserving headroom inside Track 1's
-30-second request limit for routing, output serialization, and a possible T2
-handoff. Stage 1 is the harness's practical reasoning budget: it emits a
-structured plan instead of raw chain-of-thought, and math, logic, debugging,
-and code-generation tasks receive up to 512 planning tokens by default.
-Category profiles determine answer length. The deadline, rather than premature
-truncation, controls runtime. A deadline or exhausted local repair cycle returns
-control to the existing T2 path.
-
-Validation distinguishes objective critical errors from advisory improvements.
-Only demonstrable correctness, completeness, executable-code, evidence-use, or
-explicit-format failures trigger repair or escalation; preferences about style,
-wording, optional detail, or unrequested explanation do not reject a good answer.
-
-The structured analysis uses category- and difficulty-specific playbooks for all
-eight Track 1 capabilities. It can request only a calculator, UTC time, Python
-syntax checking, or restricted Python execution. The local harness contains no
-web-search or arbitrary external-inference path. A freshness-dependent task is
-returned to the existing approved Fireworks route instead. Audit logs store only
-safe metadata such as prompt hashes, stage timings, validation scores, and tool
-status; they do not store prompts, answers, tool contents, or credentials.
-
-Tune the bounded stage and tool limits through the `LOCAL_T1_*` and
-`LOCAL_PYTHON_*` variables in `.env.example`.
-
----
-
-## Environment variables
-
-At evaluation time, the grading harness injects these. **Do not hardcode them.**
-
-- `FIREWORKS_API_KEY`
-- `FIREWORKS_BASE_URL` (the judging proxy — all T2 calls must route through it)
-- `ALLOWED_MODELS` (comma-separated or JSON list of allowed cloud model IDs)
-- `INPUT_PATH` (default `/input/tasks.json`)
-- `OUTPUT_PATH` (default `/output/results.json`)
-
----
-
-## Build & run (graded image)
+The agent implements the Track 1 harness contract: it reads `/input/tasks.json`,
+writes `/output/results.json` as `[{"task_id", "answer"}]`, and exits 0.
 
 ```bash
-# Pull the graded submission image (public on Docker Hub)
-docker pull stealthed/o1-track1:latest
-
-# Run against a task file (mount input/output) under grader limits
-docker run --rm --memory=4g --cpus=2 \
-  -v "$PWD/test-input/tasks.json:/input/tasks.json:ro" \
-  -v "$PWD/test-output:/output" \
-  stealthed/o1-track1:latest
-
-# Inspect the result
-cat test-output/results.json
-```
-
-Leaving `FIREWORKS_*` unset is the intended local test: T0 answers populate,
-T1 attempts locally (if weights are present), and T2 stays unconfigured. This
-proves the pipeline and JSON contract without spending tokens.
-
-### Grader simulation (recommended before submit)
-
-Run the image under the exact grading limits to confirm the harness contract:
-
-```bash
-docker run --rm --memory=4g --cpus=2 \
-  -v "$PWD/test-input/tasks.json:/input/tasks.json:ro" \
-  -v "$PWD/test-output:/output" \
+docker run --rm \
+  -v "$PWD/tasks.json":/input/tasks.json \
+  -v "$PWD/out":/output \
+  -e INPUT_PATH=/input/tasks.json \
+  -e OUTPUT_PATH=/output/results.json \
+  -e LOCAL_T1_BACKEND=ollama \
   stealthed/o1-track1:latest
 ```
 
-Expect: every task answered where a tier succeeded, valid JSON, exit code `0`.
+## Constraints satisfied
 
----
+- **0 Fireworks tokens** — local-only inference.
+- **Image < 10GB** — python:3.11-slim + Ollama + gemma-4-2B q4_0 (~5.7GB).
+- **4GB RAM / 2 vCPU grader** — single 2B model, CPU-only.
+- **< 30s per request, < 10 min total** — T0 tasks instant; T1 under budget.
+- **Exit 0** — always emits complete valid JSON.
 
-## Verification
+## Techniques merged from the field
+
+- Deterministic safety-net for exact-count/code constraints (LocalFirst).
+- gemma-4-2B as the general local model (Gulliver's 100% local build).
+- `Decimal`-based math precision (NidraRoute).
+- Category-aware minimal prompts (LeAgentlocal / TERA — prompt discipline only;
+  the TERA token-exploit was deliberately not copied).
+
+## Build
 
 ```bash
-# T0 correctness gate — asserts expected answers on the practice set
-python scripts/verify_t0.py
+docker build -f Dockerfile.gemma2 -t stealthed/o1-track1:latest .
 ```
 
-The gate exits non-zero if any practice task regresses (wrong or empty answer),
-so a silent solver bug fails loudly instead of shipping.
-
----
-
-## Team & ownership
-
-| Area | Owner(s) |
-|------|----------|
-| Routing + container (`app/router.py`, `solve.py`, `Dockerfile.gemma`) | Jae, Sajid |
-| Local model serving (`local/`) | CringeKid, Science_AJ |
-| Cloud/Fireworks client (`app/fireworks_client.py`) | Unknown Person |
-| FastAPI integration (`app/main.py`) | Hero |
-| Frontend (Next.js, demo only) | Science_AJ |
-
-The submission is the **Docker image**, not the UI. The Next.js frontend is a
-demo and is not part of the graded artifact.
-
----
-
-## Notes for reviewers
-
-- The deterministic T0 layer is the backbone: it gives exact, token-free answers
-  for the verifiable categories and defers everything else to the local model.
-- The local model extends coverage to open-ended tasks at zero cloud cost.
-- The cloud fallback exists purely for robustness; a well-tuned local run can
-  complete the task set with **zero Fireworks tokens**.
+The build downloads `gemma-4-E2B_q4_0-it.gguf` from HuggingFace and registers
+it as an Ollama model inside the image.

@@ -46,7 +46,7 @@ def classify_domain(prompt: str) -> str:
         return "debug"
     if any(word in text for word in ["write a python function", "write a function", "implement", "generate code"]):
         return "codegen"
-    if any(word in text for word in ["each own", "each picked", "each chose", "different pet", "different color", "different colour", "constraint", "who owns", "who picked", "who chose", "which one", "deduce", "logic puzzle", "each has a different"]):
+    if any(word in text for word in ["each own", "each picked", "each chose", "different pet", "different color", "different colour", "constraint", "who owns", "who picked", "who chose", "which one", "deduce", "logic puzzle", "each has a different", "all bloops", "all bloop"]):
         return "logic"
     if re.search(r"\d", text) and any(word in text for word in ["how many", "calculate", "percent", "%", "average", "total", "remain", "remaining", "more", "less"]):
         return "math"

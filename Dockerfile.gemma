@@ -10,5 +10,9 @@ RUN pip install --no-cache-dir openai
 # bake both local models so T1 can switch via LOCAL_MODEL env
 RUN ollama serve >/tmp/ollama.log 2>&1 & sleep 8 && ollama pull qwen2.5-coder:1.5b-instruct-q4_K_M && ollama pull gemma3:2b-it-q4_K_M; pkill -f "ollama serve" || true
 ENV LOCAL_T1_BACKEND=ollama
-ENV LOCAL_MODEL=gemma3:1b-it-qat
+# ponytail: use the 2b we already bake (gemma3:2b-it-q4_K_M) for T1, not the 1b.
+# Stronger local model, still 0 Fireworks tokens.
+ENV LOCAL_MODEL=gemma3:2b-it-q4_K_M
+# ponytail: T2 cloud fallback disabled by default (0-token build). Set ENABLE_T2=1 to re-enable.
+ENV ENABLE_T2=0
 ENTRYPOINT ["/app/entrypoint.sh"]
