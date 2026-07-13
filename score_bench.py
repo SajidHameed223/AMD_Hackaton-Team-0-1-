@@ -66,7 +66,7 @@ def main():
     print("-" * 60)
     for t in bench:
         tid = t["task_id"]
-        cat = t["category"]
+        cat = t.get("category", "?")
         ans = (res_by_id.get(tid, {}).get("answer") or "").strip()
         a = ans.lower()
         fn = EXPECT.get(tid)

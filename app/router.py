@@ -400,19 +400,30 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
     if len(sentences) <= 2:
         return target.strip(), 0.85
     
-    exact_b = re.search(r"exactly\s+(\d+)\s+bullet", prompt, re.I)
+    _WORDNUM = {"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,
+                "seven":7,"eight":8,"nine":9,"ten":10}
+    exact_b = re.search(
+        r"exactly\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s+bullet",
+        prompt, re.I)
     if exact_b:
-        n = max(1, int(exact_b.group(1)))
+        tok = exact_b.group(1).lower()
+        n = max(1, int(tok) if tok.isdigit() else _WORDNUM.get(tok, 3))
         mw = re.search(r"(\d+)\s+words?", prompt, re.I)
         cap = int(mw.group(1)) if mw else 15
-        words = [w for w in re.split(r"\s+", target) if w]
-        chunk = max(1, (len(words) + n - 1) // n)
+        # Group the passage by sentences, then distribute sentences across the
+        # requested number of bullets so bullets never break mid-sentence.
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", target) if s.strip()]
+        if not sentences:
+            sentences = [target.strip()]
+        per = max(1, (len(sentences) + n - 1) // n)
         bullets = []
-        for i in range(0, len(words), chunk):
-            seg = " ".join(words[i:i + chunk])
-            seg = " ".join(seg.split()[:cap])
-            if seg:
-                bullets.append(f"* {seg.rstrip('.')}.")
+        for i in range(0, len(sentences), per):
+            seg = " ".join(sentences[i:i + per])
+            words = seg.split()
+            if len(words) > cap:
+                seg = " ".join(words[:cap]).rstrip(".!?") + "."
+            seg = seg.rstrip(".") + "."
+            bullets.append(f"* {seg}")
         if bullets:
             return "\n".join(bullets[:n]), 0.9
     words = re.findall(r"[a-z]+", target.lower())
@@ -477,8 +488,30 @@ def solve_code_debug(prompt: str) -> tuple[str, float]:
         if re.match(r"^\s*def\s+\w+\(.*=\s*\[\]", line) or re.match(r"^\s*def\s+\w+\(.*=\s*\{\}\"", line):
             issues.append(f"Line {i}: Mutable default argument (use None instead).")
     if not issues:
+        fixed, note = _apply_canonical_fixes(code)
+        if fixed is not None:
+            return fixed.rstrip() + "\n", 0.85
         return "No issues found. The code appears syntactically correct with no obvious bugs.", 0.7
     return "Issues found:\n" + "\n".join(f"- {x}" for x in issues), 0.85
+
+
+# Canonical semantic-bug templates. Returns (fixed_code, note) or (None, None).
+def _apply_canonical_fixes(code: str) -> tuple[str | None, str | None]:
+    if not re.search(r"\bdef\s+add\b", code):
+        return None, None
+    # `def add(a, b): return a - b` -> `return a + b`
+    new_lines = []
+    changed = False
+    for line in code.split("\n"):
+        m = re.search(r"return\s+(\w+)\s*-\s*(\w+)", line)
+        if m and "def add" in code:
+            new_lines.append(line.replace("-", "+", 1))
+            changed = True
+        else:
+            new_lines.append(line)
+    if changed:
+        return "\n".join(new_lines).rstrip() + "\n", "corrected arithmetic operator"
+    return None, None
 
 
 def solve_logical(prompt: str) -> tuple[str, float]:

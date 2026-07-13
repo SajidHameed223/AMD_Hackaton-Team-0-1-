@@ -29,6 +29,7 @@ benchmark*.json
 # Local-model Docker runtime and artifact exclusions
 input
 output
+out/
 *.tar
 *.tar.gz
 *.zip

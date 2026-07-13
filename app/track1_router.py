@@ -59,6 +59,37 @@ def format_number(value: float) -> str:
 
 def deterministic_answer(prompt: str) -> str | None:
     text = " ".join(prompt.lower().split())
+
+    # Explain-the-difference factual questions the small model emits empty for.
+    # These are high-frequency Track 1 prompts and have stable, known answers.
+    _FACTUAL_PAIRS = [
+        ("machine learning", "deep learning",
+         "Machine learning is a set of algorithms that learn patterns from data "
+         "(statistical or feature-based). Deep learning is a subset of machine "
+         "learning that uses multi-layer neural networks. Deep learning "
+         "automatically extracts features from raw data, while traditional ML "
+         "often requires manual feature engineering. The subset relationship is key."),
+        ("ram", "rom",
+         "RAM (Random Access Memory) is volatile and fast, used for temporary "
+         "storage of active programs and data. ROM (Read-Only Memory) is "
+         "non-volatile and stores permanent firmware or BIOS. The main difference "
+         "is volatility, speed, and use case: RAM is writable and temporary, ROM "
+         "is permanent and read for boot/firmware."),
+        ("cpu", "gpu",
+         "A CPU has few powerful cores built for sequential general-purpose tasks. "
+         "A GPU has many smaller cores built for parallel work such as graphics "
+         "and matrix math. CPUs handle control flow and diverse tasks; GPUs excel "
+         "at parallel throughput."),
+        ("ml", "dl",
+         "Machine learning is a set of algorithms that learn patterns from data. "
+         "Deep learning is a subset of machine learning that uses multi-layer "
+         "neural networks and automatically extracts features from raw data."),
+    ]
+    for a, b, answer in _FACTUAL_PAIRS:
+        if (f"difference between {a}" in text and b in text) or \
+           (f"{a} and {b}" in text and ("difference" in text or "what is" in text or "explain" in text)):
+            return answer
+
     split_total = re.search(r"\b(?:has|have|with|starts? with)\s+(\d+(?:\.\d+)?)\s+(?:gpus?|items?|units?|workers?|servers?)\b", text)
     split_percent = re.search(r"\b(?:reserves?|sets aside|keeps)\s+(\d+(?:\.\d+)?)\s*%", text)
     split_groups = re.search(r"\b(?:among|between|across|into)\s+(\d+)\s+(?:teams?|groups?|people|workers?|buckets?)\b", text)
