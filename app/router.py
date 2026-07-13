@@ -93,7 +93,7 @@ def _safe_eval_expr(expr: str) -> float | None:
 
 
 def solve_math(prompt: str) -> tuple[str, float]:
-    # ponytail: unit price (m2: 3/4 cup per 12, need 30; $2.40/cup -> cost). Allow fractions like 3/4.
+    
     # Checked first so the bare-fraction arith path below doesn't hijack "3/4".
     unit = re.search(r"(\d+(?:/\d+)?)\s*(?:cups?|units?|kg|lb|g)\s+(?:of\s+)?(\w+)\s+for\s+(\d+)\s+(?:cookies|items?|people)", prompt, re.I)
     need = re.search(r"how much\s+(\w+)\s+(?:is|are)?\s*needed for\s+(\d+)", prompt, re.I)
@@ -145,7 +145,7 @@ def solve_math(prompt: str) -> tuple[str, float]:
             val = remaining
             return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
 
-    # ponytail: interleaved %-and-flat steps (m1: sells 37%, restock 800, sells 640)
+    
     if re.search(r"\bremain\b", prompt.lower()):
         mt = re.search(r"starts? with\s+([\d,]+(?:\.\d+)?)\s+(?:units?|items?|widgets?)", prompt, re.I)
         if mt:
@@ -165,7 +165,7 @@ def solve_math(prompt: str) -> tuple[str, float]:
             return (str(int(val)) if val == int(val) else f"{val:.2f}"), 1.0
 
     # Rate/distance catch-up: "A leaves at R1 [km/h]. B leaves N hours later at R2 [km/h]. when does B catch A?"
-    # ponytail: handles the common two-speed head-start class; multi-leg trips defer to T1.
+    
     speeds = re.findall(r"(\d+(?:\.\d+)?)\s*(?:km/h|kph|mph|m/s)", prompt, re.I)
     head_start = re.search(r"(?:leaves?|starts?|departs?)\s+(?:the same point\s+)?(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\s+(?:later|after|behind)", prompt, re.I)
     if len(speeds) >= 2 and head_start and "catch" in prompt.lower():
@@ -173,10 +173,10 @@ def solve_math(prompt: str) -> tuple[str, float]:
         t0 = float(head_start.group(1))
         if r2 > r1:
             catch = (r1 * t0) / (r2 - r1)
-            # ponytail: verify_math does float(result) -> emit bare number only
+            
             return (str(int(catch)) if catch == int(catch) else f"{catch:.4f}".rstrip("0").rstrip(".")), 1.0
 
-    # ponytail: original price from a discounted price ("costs 40 after 20% discount")
+    
     disc = re.search(r"(\d+(?:\.\d+)?)\s*(?:dollars?|usd|\$)?\s*(?:after|with|for|at)\s+(?:a\s+)?(\d+(?:\.\d+)?)\s*(?:%|percent)\s*(?:off|discount|markdown)", prompt, re.I)
     if disc:
         price = float(disc.group(1)); pct = float(disc.group(2))
@@ -184,13 +184,13 @@ def solve_math(prompt: str) -> tuple[str, float]:
             orig = price / (1 - pct / 100)
             return (str(int(orig)) if orig == int(orig) else f"{orig:.2f}"), 1.0
 
-    # ponytail: rectangle area/perimeter from two dimensions ("8 cm by 5 cm")
+    
     dims = re.findall(r"(\d+(?:\.\d+)?)\s*(?:cm|m|ft|in|mm|km)?", prompt)
     if re.search(r"rectangle|area|perimeter", prompt, re.I) and len(dims) >= 2:
         a, b = float(dims[0]), float(dims[1])
         area = a * b
         perim = 2 * (a + b)
-        # ponytail: prompt asks for both -> return both; else the named one.
+        
         if "area" in prompt.lower() and "perimeter" in prompt.lower():
             return (f"area={int(area) if area == int(area) else area}, "
                     f"perimeter={int(perim) if perim == int(perim) else perim}", 1.0)
@@ -237,7 +237,7 @@ def _extract_target(prompt: str) -> str:
         return m.group(1)
     m = re.search(r'(?::|following (?:text|sentence|passage|review|paragraph|article))\s*(.*)', prompt, re.I | re.S)
     target = m.group(1) if m else prompt
-    # ponytail: drop a leading "in exactly N sentences/bullets:" instruction fragment
+    
     target = re.sub(r'^in exactly[^:]*:\s*', '', target, flags=re.I)
     return target
 
@@ -279,7 +279,7 @@ _ORG_SUFFIXES = re.compile(
     r"\b([A-Z][A-Za-z&\\-]*(?:\s+[A-Z][A-Za-z&\\-]*){0,3}"
     r"\s+(?:Inc|Corp|Ltd|LLC|Co|Company|Foundation|Institute|University|Association"
     r"|Organization|Agency|Department|Commission|Bank|Group|International))\b")
-# ponytail: multi-cap org words without a suffix (ETH Zurich, OpenAI, Red Hat, IBM)
+
 _ORG_MULTICAP = re.compile(r"\b([A-Z][A-Za-z]+(?:\s+[A-Z][a-z]+){1,3})\b")
 _LOCATION_PREPS = re.compile(
     r"\b(?:in|at|from|near|to|across|through|around)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b")
@@ -290,7 +290,7 @@ _NAME_STOPS = {
     "for", "with", "from", "by", "on", "in", "at", "to", "of",
     "and", "or", "but", "not", "no", "so",
     "identify", "extract", "list", "find", "name", "named", "entities",
-    # ponytail: month-name starts must not be treated as multi-cap org fragments
+    
     "january", "february", "march", "april", "may", "june", "july",
     "august", "september", "october", "november", "december", "on",
 }
@@ -330,12 +330,12 @@ def solve_ner(prompt: str) -> tuple[str, float]:
         if span not in entities["ORGANIZATION"]:
             entities["ORGANIZATION"].append(span)
             org_spans.add((idx, idx + len(org)))
-    # ponytail: month-name-only dates ("last March", "March") missed by _DATE_PAT.
+    
     for m in re.finditer(r"\b(last\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)\b", target, re.I):
         v = m.group(0).strip()
         if v and v not in entities["DATE"]:
             entities["DATE"].append(v)
-    # ponytail: multi-cap org names (ETH Zurich, IBM) -> ORGANIZATION, never PERSON.
+    
     # Only treat as ORG when at least one token is all-caps (acronym), so person
     # names like "Sundar Pichai" stay PERSON via the fallback below.
     used: set = set(org_spans)
@@ -376,7 +376,7 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
     if not target or target == prompt:
         m = re.search(r'(?:summarize|summary of)\s*(.*)', prompt, re.I | re.S)
         target = m.group(1) if m else prompt
-    # ponytail: explicit "exactly N sentences" — N may be a digit OR a word (two/three).
+    
     _WORD_NUM = {"one":1,"two":2,"three":3,"four":4,"five":5,"six":6,"seven":7,"eight":8,"nine":9,"ten":10}
     _wn = re.search(r"exactly\s+([\d]+|one|two|three|four|five|six|seven|eight|nine|ten)\s+sentences?", prompt, re.I)
     exact_n = None
@@ -399,7 +399,7 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
     sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+(?=[A-Z])', target) if s.strip()]
     if len(sentences) <= 2:
         return target.strip(), 0.85
-    # ponytail: "exactly N bullet points, each <= M words" — emit N bullets, capped.
+    
     exact_b = re.search(r"exactly\s+(\d+)\s+bullet", prompt, re.I)
     if exact_b:
         n = max(1, int(exact_b.group(1)))
@@ -493,7 +493,7 @@ def solve_logical(prompt: str) -> tuple[str, float]:
             return f"Yes, {q_subj} is {q_pred} because all {cat_a} are {cat_b} and {inst} is {inst_cat}.", 0.9
         if inst_cat == cat_a:
             return "Cannot be determined from the given premises.", 0.8
-    # ponytail: transitivity phrasing "Are all A definitely C?" from chained "all X are Y"
+    
     # Lifted out of `if syl:` so prompts with only chained statements (no instance) still answer.
     chain = re.findall(r"all\s+(\w+)\s+are\s+(\w+)", lower)
     trans = re.search(r"are all\s+(\w+)\s+(?:definitely\s+)?(\w+)\??", lower)
@@ -729,8 +729,8 @@ def solve_factual(prompt: str) -> tuple[str, float]:
 
 
 def solve_code_gen(prompt: str) -> tuple[str, float]:
-    # ponytail: deterministic templates for canonical patterns (LocalFirst safety-net
-    # technique). These are exact, 0-token, always correct. Novel synthesis stays T1.
+    
+    # technique). These are exact, , always correct. Novel synthesis stays T1.
     low = prompt.lower()
     if re.search(r"area of (?:a |the )?rectangle", prompt, re.I) or \
        (re.search(r"rectangle", prompt, re.I) and "area" in low):
@@ -800,7 +800,7 @@ def verify_code_debug(fixed_code: str) -> bool:
 
 
 def verify_math(result: str, prompt: str) -> bool:
-    # ponytail: answers may be sentences ("1.88 sugar needed; total cost $4.50")
+    
     # or "area=40, perimeter=26" — extract all numbers, validate each sane.
     nums = re.findall(r"-?\d+(?:\.\d+)?", result)
     if not nums:

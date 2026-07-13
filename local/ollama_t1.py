@@ -1,4 +1,4 @@
-"""Run the existing agentic T1 loop through local Ollama."""
+"""Run the agentic T1 loop through local Ollama."""
 
 import json
 import os
@@ -25,20 +25,18 @@ _CODE_RULE = (
 
 
 def generate(prompt, task_type="default", speed_mode=True, model_id=None):
-    model = os.environ.get("LOCAL_MODEL", "qwen2.5-coder:1.5b-instruct-q4_K_M")
-    # ponytail: qwen-coder swap made c2/g2 worse. Reverted to gemma-4-2B for all.
-    # Code correctness now handled by T0 template solver + compile() retry in ollama_t1.
+    model = os.environ.get("LOCAL_MODEL", "gemma4:2b")
     code_model = model
     url = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434/api/chat")
     category = canonical_category(task_type)
 
     def call(system: str, user: str, max_tokens: int) -> str:
         if system == ANALYZER_SYSTEM:
-            cap, timeout = 48, 12
+            cap, timeout = 48, 28
         elif system == JUDGE_SYSTEM:
-            cap, timeout = 64, 15
+            cap, timeout = 64, 28
         else:
-            cap, timeout = (384, 26) if category in _CODE else (256, 26)
+            cap, timeout = (384, 28) if category in _CODE else (256, 28)
             if category in _CODE:
                 system += _CODE_RULE
 
@@ -72,8 +70,6 @@ def generate(prompt, task_type="default", speed_mode=True, model_id=None):
         started = time.monotonic()
         user = f"Task:\n{prompt}\n\nReturn code only."
         answer = call(ANSWER_SYSTEM, user, 512)
-        # ponytail: retry if the model truncated (incomplete syntax). gemma halts
-        # mid-function on recursion; ast.parse catches it. Max 2 nudges.
         for _ in range(2):
             try:
                 compile(answer, "<code>", "exec")

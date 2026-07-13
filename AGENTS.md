@@ -1,102 +1,55 @@
-# Project Context for Future Agents
+# Track 1 Agent - Repository Guide
 
-This repo is the O(1) hackathon project for Track 1, Agentic AI. The product is
-a chat UI plus backend routing layer that sends prompts to different model
-backends to balance speed, cost, and response quality.
+## Live path (what the grader runs)
 
-## Current Team Context
+```
+Dockerfile.gemma2 -> entrypoint_gemma.sh -> solve.py
+  solve.py reads /input/tasks.json, routes each task through app/router.dispatch()
+    T0: deterministic solvers in app/router.py (exact, no model)
+    T1: local/ollama_t1.py -> Ollama HTTP (gemma-4-2B)
+    T2: app/fireworks_client.py (gated by ENABLE_T2=1, off in graded run)
+  solve.py writes [{"task_id", "answer"}] to /output/results.json, exits 0
+```
 
-- Science_AJ is the frontend owner. That means React, Next.js, UI polish,
-  LaTeX rendering, code snippets, copy buttons, retry button, loading/streaming
-  text, and message formatting.
-- Hero owns the FastAPI integration layer that connects the frontend to the
-  backend services.
-- CringeKid owns local LLM work, including Gemma and other local models on WSL.
-- Unknown Person owns cloud LLM work, currently involving Fireworks.ai.
-- Sajid Hameed and Jae own router logic.
-- Sajid is also training or benchmarking router behavior on LeetCode-style
-  datasets.
+## Key files
 
-Do not assume Science_AJ is asking for backend model implementation unless the
-request explicitly says so. Science_AJ usually needs clean frontend-facing
-FastAPI contracts and UI behavior.
+- `app/router.py` - regex classifier + 8 category solvers. Each returns
+  (answer, confidence). dispatch() uses T0 at confidence >= 0.8, else T1.
+- `app/track1_router.py` - fast-path domain classifier + hardcoded
+  deterministic answers for inventory math, median, flatten, dedupe, etc.
+  dispatch() checks this first; returns None when it cannot solve.
+- `local/ollama_t1.py` - T1 Ollama HTTP loop. Code tasks get compile() retry.
+  Non-code tasks run the multi-stage harness (analyze/answer/validate/repair).
+- `local/t1_inference.py` - multi-stage harness bounded by
+  LOCAL_T1_REQUEST_DEADLINE_S (default 28s).
 
-## Important Integration Rule
+## Grader rules
 
-This project is not tied to OpenAI. The model backend can be any local model,
-Fireworks.ai model, custom router, or other provider.
+- Exit 0, runtime < 10 min, image < 10 GB.
+- Output exactly `[{"task_id": "...", "answer": "..."}]`. No extra fields.
+- Cloud calls route through FIREWORKS_BASE_URL with ALLOWED_MODELS only.
+- Grader VM: 4 GB RAM, 2 vCPU, CPU-only, linux/amd64.
 
-FastAPI should expose stable endpoints for the frontend. Backend/model teams can
-plug their implementation behind those endpoints. The current generic chat
-adapter is:
+## Verification
 
-- `POST /chat`
-- Optional forwarding via `CHAT_BACKEND_URL`
-- Response shape: `reply`, `route`, `model`, `latency_ms`
+```bash
+python app/router.py            # T0 demo
+python scripts/verify_t0.py     # T0 correctness gate
+python -m unittest discover -s tests -v
+```
 
-The `model` field is only a display string returned by the backend. It must not
-be treated as a fixed provider or fixed model name.
+## Build and run
 
-## Current API Contract
+```bash
+docker build --platform linux/amd64 -f Dockerfile.gemma2 -t my-track1:latest .
+docker run --rm -v "$PWD/tasks.json":/input/tasks.json -v "$PWD/out":/output my-track1:latest
+```
 
-Use `docs/frontend-api-contract.md` as the source of truth for frontend/backend
-integration payloads. FastAPI also exposes:
+## Notes
 
-- `GET /docs`
-- `GET /openapi.json`
-
-Current frontend-facing endpoints:
-
-- `GET /health`
-- `POST /chat`
-- `POST /chat/retry`
-- `GET /chat/sessions`
-- `GET /chat/sessions/search?q={query}`
-- `GET /chat/sessions/{session_id}`
-- `PUT /chat/sessions/{session_id}`
-- `GET /dashboard/usage`
-- `GET /ui/config`
-
-Versioned aliases also exist under `/api/v1` for integration clients. Existing
-frontend calls can stay unversioned.
-
-## Database Context
-
-Chat history is PostgreSQL-backed and migratable with Alembic. The repo ships
-schema only, with no seed data.
-
-Local setup uses:
-
-- Postgres Docker Compose port `55432`
-- `DATABASE_URL=postgresql+psycopg2://o1:o1@localhost:55432/o1`
-- `python -m alembic upgrade head`
-
-If `DATABASE_URL` is absent:
-
-- `/health` should return `database: "not_configured"`
-- chat history endpoints should return `503`
-- `/usage` should still return a valid zeroed dashboard payload
-
-## Frontend Behavior Context
-
-- Routing is auto-only in the UI. Do not restore manual local/cloud selectors.
-- The composer should show an `Auto` badge, not a route dropdown.
-- Completed assistant messages should show both Copy and Retry actions.
-- Retry should resend the original user turn through `POST /chat/retry`, not
-  duplicate stale assistant messages.
-- The history rail should use PostgreSQL-backed endpoints when available and
-  fall back to local draft behavior when unavailable.
-- LaTeX rendering and code-block rendering are Science_AJ's frontend lane; do
-  not add a FastAPI endpoint for them unless explicitly requested.
-
-## Development Notes
-
-- The working branch for this slice is `frontend`.
-- Keep backend changes focused on frontend integration contracts unless asked
-  otherwise.
-- Keep provider-specific names out of generic docs and UI unless the team asks
-  to show a concrete configured model name.
-- Preserve `X-Request-ID` and `X-API-Version` response headers when modifying
-  FastAPI middleware; they make frontend/backend debugging easier.
-- `frontend/AGENTS.md` warns that the Next.js version has breaking changes; read
-  local Next.js docs before changing framework-specific code.
+- The entrypoint pre-loads the model before running solve.py. The first
+  inference on a 2-vCPU/4GB box takes 20-40s to load the model into RAM.
+  Without pre-loading, that first call times out.
+- Do not add extra fields to results.json entries. The grader checks schema.
+- The torch-based T1 path (local/model.py) is for dev only. The graded image
+  uses the Ollama HTTP path exclusively.

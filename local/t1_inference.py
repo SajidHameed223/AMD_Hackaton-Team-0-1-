@@ -236,7 +236,7 @@ def run_cycle(prompt: str, task_type: str, call: ModelCall) -> dict[str, Any]:
         prompt=prompt,
         category=canonical_category(task_type),
         # Keep headroom within the published 30-second Track 1 request limit.
-        deadline_at=started + _seconds("LOCAL_T1_REQUEST_DEADLINE_S", 26.0, 5.0, 29.0),
+        deadline_at=started + _seconds("LOCAL_T1_REQUEST_DEADLINE_S", 28.0, 5.0, 29.0),
     )
     try:
         analysis = _stage(state, "analyzer", call, ANALYZER_SYSTEM, _analyzer_prompt(prompt, state.category), _analysis_cap(state.category))

@@ -163,7 +163,9 @@ class ToolTests(unittest.TestCase):
     def test_hard_rubric_and_analyzer_allow_only_local_tools(self):
         rubric = rubric_for("logical", "hard")
         self.assertIn("interacting constraints", rubric["difficulty_requirement"])
-        self.assertIn("calculator|python_syntax|python_execute|current_time", ANALYZER_SYSTEM)
+        # All four local tools must be enumerated by the analyzer allow-list.
+        for tool in ("calculator", "python_syntax", "python_execute", "current_time"):
+            self.assertIn(tool, ANALYZER_SYSTEM)
 
     def test_deterministic_failure_cannot_be_overruled(self):
         merged = merge_verdict(

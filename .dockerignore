@@ -1,10 +1,8 @@
 # Keep build context lean — only what solve.py needs enters the image
 frontend/
-benchmark_results/
 scripts/
+tests/
 docs/
-migrations/
-ml/data/
 node_modules/
 .venv*/
 venv/
@@ -22,6 +20,11 @@ dashboard.html
 .github/
 .vscode/
 AGENTS.md
+README.md
+score_bench.py
+bench_*.json
+test-input/
+benchmark*.json
 
 # Local-model Docker runtime and artifact exclusions
 input
