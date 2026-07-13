@@ -22,26 +22,31 @@ local model as an offline fallback.
 ## Architecture
 
 ```
-tasks.json ──▶ classify ──▶ T0 deterministic solver
-                              └─▶ T2 cloud model (Fireworks proxy, 0 tokens)  PRIMARY
-                                    └─▶ T1 local model (llama.cpp GGUF)        FALLBACK
+tasks.json ──▶ classify ──▶ T0 deterministic solver  (0 tokens — does not count)
+                              └─▶ T1 local model (llama.cpp GGUF)  (0 tokens — does not count)
+                                    └─▶ T2 cloud model (Fireworks proxy)  ← ONLY tier the leaderboard ranks (by ascending token count)
 ```
 
 - **T0 (deterministic):** math, NER, summarization formatting, sentiment
   lexicon, canonical code patterns. Exact output, no model call, no network.
-- **T2 (cloud, primary):** every call is routed through the `FIREWORKS_BASE_URL`
-  proxy that the grader injects at runtime. Because the proxy is sponsored, these
-  calls cost participants **0 tokens** — so we route every non-deterministic task
-  to the strongest available reasoning model for maximum accuracy.
-- **T1 (local, fallback):** a small 2B Q4 GGUF served by llama.cpp. Used only
-  when the cloud tier is unavailable or returns a truncated answer.
+  Free and counts as 0 tokens.
+- **T1 (local, 0 tokens):** a small 2B GGUF served by llama.cpp. Used for
+  every non-deterministic task the local model can answer. Because local
+  inference costs 0 tokens on the leaderboard, it is preferred over the cloud
+  tier whenever it produces a usable answer.
+- **T2 (cloud, ranked):** every call here goes through the `FIREWORKS_BASE_URL`
+  proxy the grader injects at runtime. These calls are what the leaderboard
+  ranks by **ascending token count** — so T2 is the *last resort*, reached only
+  when neither deterministic nor local could answer. Fewer T2 calls = higher rank.
 
 ## Scoring model
 
-The leaderboard ranks 0-token submissions by accuracy first, then by ascending
-token count. Since all our inference is 0 tokens (deterministic + local are free,
-and Fireworks calls go through the 0-token proxy), our only objective is
-**accuracy** — which is why the primary tier always uses the most capable model.
+The leaderboard applies an **accuracy gate** first, then ranks passing
+submissions by **ascending T2 token count** (fewer tokens = higher rank).
+Deterministic and local inference cost 0 tokens, so the strategy is: solve as
+much as possible with T0 + T1, and spend T2 tokens only on the tasks that
+genuinely need the cloud model. Accuracy is never sacrificed — a task that the
+local model answers wrongly always escalates to T2.
 
 ## Build & run
 
