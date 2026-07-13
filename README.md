@@ -56,6 +56,15 @@ docker run --rm \
   track1-agent:latest
 ```
 
+The published image (public registry) is:
+
+```
+ghcr.io/jaepyjs/track1-agent:latest
+```
+
+The grader injects `FIREWORKS_BASE_URL`, `FIREWORKS_API_KEY`, and
+`ALLOWED_MODELS` at runtime; no credentials are baked into the image.
+
 The container reads `/input/tasks.json`, writes `/output/results.json` as
 `[{"task_id": "...", "answer": "..."}]`, and exits 0.
 
