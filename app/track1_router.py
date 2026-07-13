@@ -7,8 +7,9 @@ import time
 import urllib.request
 from dataclasses import dataclass
 
-from app.vllm_client import VLLMClient
-
+# vLLM local backend is a dev-only path; the graded image uses the llama.cpp
+# fallback exclusively, so the vLLM client is intentionally not imported here.
+_VLLM_CLIENT = None
 
 LOCAL_MODEL = os.getenv("LOCAL_MODEL_NAME", "gemma3:1b-it-qat")
 CLOUD_MODEL_LABEL = os.getenv("CLOUD_MODEL_NAME", "Fireworks")

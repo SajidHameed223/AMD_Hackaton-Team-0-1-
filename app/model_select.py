@@ -1,47 +1,54 @@
 from __future__ import annotations
 
-# Substrings that tend to indicate a lighter/cheaper/faster variant.
-_CHEAP_HINTS = ("flash", "lite", "mini", "small", "fast", "turbo", "8b", "3b", "2b", "1b")
-# Substrings that tend to indicate a larger/more capable variant.
-_STRONG_HINTS = ("thinking", "large", "pro", "70b", "235b", "max", "ultra")
+# Score ALLOWED_MODELS (injected by the grader at runtime) and pick the single
+# strongest *text* model. Because all Fireworks calls go through the competition
+# proxy and cost participants 0 tokens, accuracy is the only thing that matters:
+# we always route every category to the best available model rather than splitting
+# cheap/strong (a token-saving split is pointless at 0 tokens).
+
+# Models that cannot answer a language task are excluded outright.
+_NON_TEXT = ("embed", "rerank", "vision", "guard", "moderation", "classify",
+             "tts", "stt", "audio", "image", "speech")
+
+# Parameter-size hints -> capability weight. Bigger general-purpose instruct
+# models score higher (they answer harder tasks correctly).
+_SIZE_PATTERNS = [
+    (r"671\s*b", 671), (r"405\s*b", 405), (r"235\s*b", 235),
+    (r"120\s*b", 120), (r"\b70\s*b", 70), (r"\b34\s*b", 34),
+    (r"\b32\s*b", 32), (r"\b13\s*b", 13), (r"\b8\s*b", 8),
+    (r"\b4\s*b", 4), (r"\b3\s*b", 3), (r"\b2\s*b", 2), (r"\b1\.5\s*b", 1),
+    (r"\b1\s*b", 1),
+]
+
+# Slight preference for instruction/chat-tuned variants when sizes tie.
+_INSTRUCT_HINTS = ("instruct", "-it", "chat", "coder")
 
 
-def _score_cheap(model_id: str) -> int:
-    name = model_id.lower()
-    return sum(1 for h in _CHEAP_HINTS if h in name)
-
-
-def _score_strong(model_id: str) -> int:
-    name = model_id.lower()
-    return sum(1 for h in _STRONG_HINTS if h in name)
+def _score_model(name: str) -> float:
+    n = name.lower()
+    if any(bad in n for bad in _NON_TEXT):
+        return float("-inf")
+    score = 0.0
+    for pat, val in _SIZE_PATTERNS:
+        if __import__("re").search(pat, n):
+            score += val
+            break
+    if any(h in n for h in _INSTRUCT_HINTS):
+        score += 5.0
+    return score
 
 
 class ModelPlan:
-    def __init__(self, cheap_model: str, strong_model: str) -> None:
-        self.cheap_model = cheap_model
-        self.strong_model = strong_model
+    def __init__(self, model: str) -> None:
+        # One model for every category: the strongest capable text model.
+        self.cheap_model = model
+        self.strong_model = model
 
 
 def plan_models(allowed_models: list[str]) -> ModelPlan:
     models = [m.strip() for m in allowed_models if m.strip()]
     if not models:
         raise ValueError("allowed_models is empty")
-
-    if len(models) == 1:
-        return ModelPlan(cheap_model=models[0], strong_model=models[0])
-
-    ranked_cheap = sorted(models, key=_score_cheap, reverse=True)
-    ranked_strong = sorted(models, key=_score_strong, reverse=True)
-
-    cheap_has_hint = _score_cheap(ranked_cheap[0]) > 0
-    strong_has_hint = _score_strong(ranked_strong[0]) > 0
-
-    cheap = ranked_cheap[0] if cheap_has_hint else models[0]
-    strong = ranked_strong[0] if strong_has_hint else models[-1]
-
-    if cheap == strong and len(models) > 1:
-        alt = next((m for m in models if m != cheap), None)
-        if alt is not None:
-            strong = alt
-
-    return ModelPlan(cheap_model=cheap, strong_model=strong)
+    ranked = sorted(models, key=lambda m: (-_score_model(m), len(m), m))
+    best = next((m for m in ranked if _score_model(m) > float("-inf")), models[0])
+    return ModelPlan(best)

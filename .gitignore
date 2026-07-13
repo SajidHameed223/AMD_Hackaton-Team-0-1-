@@ -18,9 +18,12 @@ proxy_tasks.json
 # Python
 __pycache__/
 *.pyc
+*.pyo
 .venv/
 .env
 
 # OS
 .DS_Store
 Thumbs.db
+bench_out/
+smoke/

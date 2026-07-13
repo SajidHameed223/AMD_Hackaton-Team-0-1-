@@ -27,10 +27,15 @@ def _min_sentences(n):
 
 def _bullets(n, max_words):
     def check(a):
-        lines = [l for l in a.splitlines() if l.strip().startswith(("*", "-"))]
+        lines = [l.strip() for l in a.splitlines() if l.strip().startswith(("*", "-"))]
         if len(lines) < n:
             return False
-        return all(len(l.split()) <= max_words for l in lines[:n])
+        for l in lines[:n]:
+            # Strip the leading bullet marker before counting words.
+            content = l[1:].strip()
+            if len(content.split()) > max_words:
+                return False
+        return True
     return check
 
 EXPECT = {

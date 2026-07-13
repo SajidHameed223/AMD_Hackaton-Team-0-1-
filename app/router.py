@@ -410,22 +410,32 @@ def solve_summarization(prompt: str) -> tuple[str, float]:
         n = max(1, int(tok) if tok.isdigit() else _WORDNUM.get(tok, 3))
         mw = re.search(r"(\d+)\s+words?", prompt, re.I)
         cap = int(mw.group(1)) if mw else 15
-        # Group the passage by sentences, then distribute sentences across the
-        # requested number of bullets so bullets never break mid-sentence.
+        # Build exactly n bullets from the source, hard-capping each at `cap` words.
+        # - When the source has >= n sentences, group sentences contiguously into
+        #   n chunks (never split a sentence).
+        # - When it has fewer sentences than n, fall back to an even word split so
+        #   we still emit exactly n bullets, each capped.
+        def _cap(seg: str) -> str:
+            seg = seg.strip().rstrip(".!?,")
+            words = seg.split()
+            if len(words) > cap:
+                seg = " ".join(words[:cap])
+            return "* " + seg.rstrip(".!?,") + "."
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", target) if s.strip()]
         if not sentences:
             sentences = [target.strip()]
-        per = max(1, (len(sentences) + n - 1) // n)
-        bullets = []
-        for i in range(0, len(sentences), per):
-            seg = " ".join(sentences[i:i + per])
-            words = seg.split()
-            if len(words) > cap:
-                seg = " ".join(words[:cap]).rstrip(".!?") + "."
-            seg = seg.rstrip(".") + "."
-            bullets.append(f"* {seg}")
-        if bullets:
-            return "\n".join(bullets[:n]), 0.9
+        bullets: list[str] = []
+        if len(sentences) == n:
+            # One clean sentence per bullet.
+            for s in sentences:
+                bullets.append(_cap(s))
+        else:
+            # Even word split guarantees exactly n bullets, each within the cap.
+            words = target.split()
+            step = max(1, (len(words) + n - 1) // n)
+            for i in range(0, len(words), step):
+                bullets.append(_cap(" ".join(words[i:i + step])))
+        return "\n".join(bullets[:n]), 0.9
     words = re.findall(r"[a-z]+", target.lower())
     stop = {"the", "a", "an", "is", "are", "was", "were", "in", "on", "at",
             "to", "for", "of", "and", "or", "but", "it", "its", "this", "that",

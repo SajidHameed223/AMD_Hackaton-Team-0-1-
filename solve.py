@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """
-solve.py — Container entrypoint for AMD Hackathon grading.
+solve.py - Container entrypoint for AMD Hackathon Track 1 grading.
 
 Reads /input/tasks.json, routes each task through the category-classifier +
 deterministic-solver pipeline, writes /output/results.json, exits 0.
 
-Tier flow:
-  T0: deterministic solver answered  — used directly
-  T1: local model inference (0 Fireworks tokens) — lazy-loaded, OOM-safe
-  T2: cloud model via Fireworks API (costs tokens) — fallback for T1 failures
+Tier flow (all inference is 0 tokens to participants):
+  T0: deterministic solver answered  - exact, no model, no network
+  T2: Fireworks via the competition proxy - PRIMARY reasoning tier (0 tokens)
+  T1: local llama.cpp GGUF - offline fallback when Fireworks is unavailable
 
-Resilience: if any tier fails for a task, the next tier is tried.
-If all tiers fail, an empty string is emitted so results.json is always
-complete valid JSON with every task_id present.
+Why Fireworks is primary: every call is routed through the harness-injected
+FIREWORKS_BASE_URL proxy, which is sponsored and costs participants 0 tokens.
+With no token budget to spend, accuracy is the only objective, so the strongest
+reasoning model answers everything that the deterministic solvers can't.
+
+Resilience: a complete, valid results.json is seeded before any network call and
+re-written after each task, so a hang, OOM, or model timeout can never yield an
+empty or malformed file. If every tier fails for a task, an empty-string answer
+is emitted so results.json is always complete and valid.
 """
 
 from __future__ import annotations
@@ -21,6 +27,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 
 
 # ---------------------------------------------------------------------------
@@ -42,18 +49,11 @@ def _parse_allowed_models() -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# T2 cloud client setup (Fireworks via ported client)
+# T2 cloud client setup (Fireworks via the competition proxy)
 # ---------------------------------------------------------------------------
 
 def _setup_cloud_client():
-    """
-    Configure FireworksClient + ModelPlan from env vars.
-
-    The harness injects FIREWORKS_BASE_URL, FIREWORKS_API_KEY, and
-    ALLOWED_MODELS at runtime.
-    """
-    
-    # so the slim ollama base needs no pip install.
+    """Configure FireworksClient + ModelPlan from the env vars the grader injects."""
     if os.environ.get("ENABLE_T2") != "1":
         return None, None
     base_url = os.environ.get("FIREWORKS_BASE_URL", "")
@@ -72,41 +72,37 @@ def _setup_cloud_client():
 
 
 # ---------------------------------------------------------------------------
-# Tier runners (T1 and T2)
+# Tier runners (T1 local + T2 cloud)
 # ---------------------------------------------------------------------------
 
-def _try_local_infer(prompt: str, category: str) -> str | None:
-    """Attempt T1 local model inference.  Returns answer or None on failure."""
+def _try_local_infer(prompt: str, category: str) -> tuple[str | None, str]:
+    """Attempt T1 local model inference. Returns (answer, model_label) or (None, '')."""
     try:
-        if os.environ.get("LOCAL_T1_BACKEND") == "ollama":
-            from local.ollama_t1 import generate  
-        else:
-            from local.t1_inference import generate  # lazy — triggers model load
+        # The graded image ships only the llama.cpp GGUF backend.
+        from local.llamacpp_t1 import generate
         result = generate(prompt, task_type=category, speed_mode=True, model_id=None)
         ans = result.get("answer", "").strip() or None
-        
+
         if ans and category in ("code_debug", "code_gen", "code") and ans.startswith("```"):
             import re as _re
             f = _re.search(r"```(?:python)?\s*(.*?)```", ans, _re.S)
             ans = (f.group(1) if f else ans).strip() or None
-        return ans
+        return ans, "local"
     except Exception as exc:
-        # Team policy: an exhausted local repair cycle enters existing T2. If
-        # this conflicts with the routing strategy, remove this fallback here.
         print(f"  T1 failed: {exc}", file=sys.stderr)
-        return None
+        return None, ""
 
 
-def _try_cloud_infer(prompt: str, client, plan) -> str | None:
-    """Attempt T2 cloud inference via Fireworks.  Returns answer or None."""
+def _try_cloud_infer(prompt: str, client, plan) -> tuple[str | None, int, str]:
+    """Attempt T2 cloud inference via Fireworks proxy. Returns (answer, tokens, finish)."""
     if client is None or plan is None:
-        return None
+        return None, 0, ""
     try:
         from app.categorize import classify as cloud_classify
 
         spec = cloud_classify(prompt)
         model = plan.strong_model if spec.use_strong_model else plan.cheap_model
-        ans, tok = asyncio.run(
+        ans, tok, finish = asyncio.run(
             client.complete(
                 model=model,
                 system_prompt=spec.system_prompt,
@@ -115,11 +111,27 @@ def _try_cloud_infer(prompt: str, client, plan) -> str | None:
                 reasoning_effort=spec.reasoning_effort,
             )
         )
-        print(f" cloud_model={model} tok={tok}", end="")
-        return ans
+        return ans, tok, finish
     except Exception as exc:
         print(f"  T2 failed: {exc}", file=sys.stderr)
-        return None
+        return None, 0, ""
+
+
+# ---------------------------------------------------------------------------
+# Atomic result writes
+# ---------------------------------------------------------------------------
+
+def _atomic_write(output_path: str, results: list[dict]) -> None:
+    """Write results.json atomically so a crash mid-write never corrupts it."""
+    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(output_path) or ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(results, fh, indent=2, ensure_ascii=False)
+        os.replace(tmp, output_path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 # ---------------------------------------------------------------------------
@@ -135,73 +147,77 @@ def main() -> None:
         tasks: list[dict] = json.load(fh)
     print(f"Loaded {len(tasks)} task(s) from {input_path}")
 
-    # 2. Setup cloud client (Fireworks) for T2 fallback
+    # 2. Setup cloud client (Fireworks) for the primary reasoning tier
     cloud_client, model_plan = _setup_cloud_client()
     if cloud_client:
-        print(f"Fireworks client ready (cheap={model_plan.cheap_model}, strong={model_plan.strong_model})")
+        print(f"Fireworks client ready (primary model={model_plan.cheap_model})")
     else:
-        print("Fireworks client not configured (no FIREWORKS_BASE_URL or ALLOWED_MODELS)")
+        print("Fireworks client not configured (no FIREWORKS_BASE_URL/ALLOWED_MODELS); "
+              "using deterministic + local only")
 
     # 3. Import T0 router
     from app.router import dispatch
 
-    # 4. Process tasks
-    results: list[dict] = []
+    # 4. Pre-seed a complete, valid results.json so a later hang/OOM can never
+    #    leave the grader with an empty or missing file.
+    results: list[dict] = [{"task_id": t["task_id"], "answer": ""} for t in tasks]
+    by_id = {t["task_id"]: t for t in tasks}
+    _atomic_write(output_path, results)
+
+    # 5. Process tasks: T0 -> T2 (primary) -> T1 (fallback)
     t0_count = t1_count = t2_count = fail_count = 0
 
-    for task in tasks:
+    for idx, task in enumerate(tasks):
         task_id = task["task_id"]
         prompt = task["prompt"]
         print(f"\n[{task_id}]", end="")
-
         answer = ""
-        try:
-            
-            # are exact and free; the local model is only a fallback.
-            r = dispatch(prompt)
-            tier = r["tier"]
-            category = r.get("category", "unknown")
-            print(f" cat={category} tier={tier}", end="")
 
-            if tier == "T0":
+        try:
+            # T0: deterministic solvers first - exact and free.
+            r = dispatch(prompt)
+            if r["tier"] == "T0":
                 answer = r["answer"]
                 t0_count += 1
-                print(" [OK] solved")
+                print(" [OK] solved (T0)")
             else:
-                if os.environ.get("LOCAL_T1_BACKEND") != "none":
-                    local_ans = _try_local_infer(prompt, category)
-                else:
-                    local_ans = None
-                if local_ans is not None:
-                    answer = local_ans
-                    t1_count += 1
-                    print(" [OK] local")
-                else:
-                    
-                    # FIREWORKS_* at grade time so it can't be disabled via env; gate here.
-                    if os.environ.get("ENABLE_T2") == "1":
-                        cloud_ans = _try_cloud_infer(prompt, cloud_client, model_plan)
-                    else:
-                        cloud_ans = None
-                    if cloud_ans is not None:
+                category = r.get("category", "unknown")
+                print(f" cat={category} tier={r['tier']}", end="")
+
+                # T2: Fireworks primary reasoning tier (0 tokens via proxy).
+                cloud_ans = None
+                if cloud_client is not None:
+                    cloud_ans, tok, finish = _try_cloud_infer(prompt, cloud_client, model_plan)
+                    if cloud_ans and finish != "length":
                         answer = cloud_ans
                         t2_count += 1
-                        print(" [OK] cloud")
+                        print(f" [OK] cloud (tok={tok})")
+                    elif finish == "length":
+                        print(" [T2 truncated] falling back to local", end="")
+                    else:
+                        print(" [T2 empty] falling back to local", end="")
+
+                # T1: local GGUF fallback when Fireworks is unavailable/truncated.
+                if not answer:
+                    if os.environ.get("LOCAL_T1_BACKEND") != "none":
+                        local_ans, _ = _try_local_infer(prompt, category)
+                        if local_ans:
+                            answer = local_ans
+                            t1_count += 1
+                            print(" [OK] local")
+                        else:
+                            fail_count += 1
+                            print(" [FAIL] all tiers failed")
                     else:
                         fail_count += 1
-                        print(" [FAIL] all tiers failed")
+                        print(" [FAIL] no tiers available")
         except Exception as exc:
             fail_count += 1
             print(f" [FAIL] dispatch error: {exc}", file=sys.stderr)
 
-        
-        # INVALID_RESULTS_SCHEMA, so emit exactly the two required fields.
-        results.append({"task_id": task_id, "answer": answer})
-
-    # 5. Write results
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as fh:
-        json.dump(results, fh, indent=2, ensure_ascii=False)
+        # Emit exactly the two required fields so results.json always passes schema.
+        results[idx] = {"task_id": task_id, "answer": answer}
+        _atomic_write(output_path, results)
 
     print(f"\nDone: {len(results)} results written to {output_path}")
     print(f"  T0={t0_count}  T1={t1_count}  T2={t2_count}  fail={fail_count}")

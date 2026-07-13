@@ -1,10 +1,9 @@
-# Keep build context lean — only what solve.py needs enters the image
-frontend/
+# Keep build context lean — only what solve.py needs enters the image.
 scripts/
 tests/
 docs/
 node_modules/
-.venv*/
+.venv/
 venv/
 __pycache__/
 *.pyc
@@ -16,7 +15,6 @@ __pycache__/
 !.env.example
 test.html
 dashboard.html
-.git/
 .github/
 .vscode/
 AGENTS.md
@@ -36,4 +34,3 @@ out/
 probe-input
 probe-output
 local.env
-*.env
