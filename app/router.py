@@ -488,6 +488,11 @@ def solve_code_debug(prompt: str) -> tuple[str, float]:
         if re.match(r"^\s*def\s+\w+\(.*=\s*\[\]", line) or re.match(r"^\s*def\s+\w+\(.*=\s*\{\}\"", line):
             issues.append(f"Line {i}: Mutable default argument (use None instead).")
     if not issues:
+        from app.deterministic import fix_code_bug
+        instr = prompt
+        fixed = fix_code_bug(code, instr)
+        if fixed is not None:
+            return fixed.rstrip() + "\n", 0.9
         fixed, note = _apply_canonical_fixes(code)
         if fixed is not None:
             return fixed.rstrip() + "\n", 0.85
@@ -560,7 +565,14 @@ def solve_logical(prompt: str) -> tuple[str, float]:
                     nv = nums[-1] * ratios[0]
                     return f"The next number is {int(nv) if nv == int(nv) else nv}. This is a geometric sequence with common ratio {ratios[0]}.", 0.95
     # General constraint satisfaction: "each have different X" + constraints
-    return _solve_constraint_puzzle(prompt)
+    ans = _solve_constraint_puzzle(prompt)
+    if ans[1] >= 0.8:
+        return ans
+    from app.deterministic import solve_logic
+    det = solve_logic(prompt)
+    if det:
+        return det, 0.9
+    return ans
 
 
 def _solve_constraint_puzzle(prompt: str) -> tuple[str, float]:

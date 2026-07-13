@@ -247,6 +247,14 @@ def run_cycle(prompt: str, task_type: str, call: ModelCall) -> dict[str, Any]:
         state.evidence = execute_requests(state.plan["tools"])
         answer = _stage(state, "answer", call, ANSWER_SYSTEM, _answer_prompt(state, rubric), _answer_cap(state.category, "LOCAL_T1_ANSWER_MAX_TOKENS", 384))
 
+        # Math tasks: if the model returned a runnable program, execute it in a
+        # sandbox and prefer the computed result (program-aided math).
+        if state.category == "math" and "```" in answer:
+            from app.deterministic import program_aided_math
+            ran = program_aided_math(answer)
+            if ran:
+                answer = ran
+
         deterministic = deterministic_checks(prompt, answer, state.category, state.evidence)
         code_category = state.category in {"code", "code_debug", "code_gen"}
         if code_category:
